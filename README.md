@@ -1,58 +1,112 @@
 # MCE Cluster Generator
 
-A comprehensive tool for generating cluster configurations for MCE (Multi-Cluster Engine) environments with GitOps integration.
+A comprehensive tool for generating cluster configurations for MCE (Multi-Cluster Engine) environments with GitOps integration. Available as both **CLI tool** and **REST API**.
 
 ## Features
 
-- **Flexible Template System**: YAML-based templates for different cluster flavors (default, PortWorks, PowerFlex, etc.)
-- **Comprehensive Validation**: Pydantic-based validation for all input parameters
-- **GitOps Integration**: Automatic branch creation, file generation, and commit/push workflows
-- **Path Validation**: Ensures correct repository structure exists or creates it
-- **Rich CLI Interface**: User-friendly command-line interface with colored output
-- **Extensive Logging**: Configurable logging with file and console output
-- **Error Handling**: Comprehensive error handling with custom exceptions
-
-## Installation
-
-### From Source
-
-```bash
-# Clone the repository
-git clone <repository-url>
-cd mce-cluster-generator
-
-# Install in development mode
-pip install -e .
-
-# Or install dependencies directly
-pip install -r requirements.txt
-```
-
-### Using pip (when published)
-
-```bash
-pip install mce-cluster-generator
-```
+- **🎯 Dual Interface**: Both CLI and REST API for maximum flexibility
+- **📋 Flexible Template System**: YAML-based templates for different cluster flavors
+- **✅ Comprehensive Validation**: Pydantic-based validation for all input parameters
+- **🔄 GitOps Integration**: Automatic branch creation, file generation, and commit/push workflows
+- **📁 Path Management**: Ensures correct repository structure exists or creates it
+- **🎨 Rich CLI Interface**: User-friendly command-line interface with colored output
+- **📡 REST API**: Full-featured API with automatic documentation
+- **📊 Extensive Logging**: Configurable logging with file and console output
+- **🛡️ Error Handling**: Comprehensive error handling with custom exceptions
 
 ## Quick Start
 
-### 1. Generate a cluster configuration (dry-run)
+### 🚀 Start the API Server
 
 ```bash
-mce-gen generate \
+# Clone and setup
+git clone <repository-url>
+cd mce-cluster-generator
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+
+# Start the API server
+python start.py
+```
+
+The API will be available at:
+- **API**: http://localhost:8000
+- **Documentation**: http://localhost:8000/docs
+- **Interactive API**: http://localhost:8000/redoc
+
+### 📋 API Usage Examples
+
+#### List Available Flavors
+```bash
+curl -X GET "http://localhost:8000/api/v1/clusters/flavors"
+```
+
+#### Preview Cluster Configuration
+```bash
+curl -X POST "http://localhost:8000/api/v1/clusters/preview" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cluster_name": "my-cluster",
+    "site": "datacenter-1",
+    "number_of_nodes": 3,
+    "mce_name": "mce-prod",
+    "environment": "prod",
+    "flavor": "default"
+  }'
+```
+
+#### Generate Cluster (Dry Run)
+```bash
+curl -X POST "http://localhost:8000/api/v1/clusters/generate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cluster_name": "api-cluster",
+    "site": "datacenter-1",
+    "number_of_nodes": 5,
+    "mce_name": "mce-prod",
+    "environment": "prod",
+    "flavor": "default",
+    "author_name": "API User",
+    "author_email": "user@company.com"
+  }'
+```
+
+#### Generate with GitOps Integration
+```bash
+curl -X POST "http://localhost:8000/api/v1/clusters/generate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cluster_name": "production-cluster",
+    "site": "datacenter-1",
+    "number_of_nodes": 5,
+    "mce_name": "mce-prod",
+    "environment": "prod",
+    "flavor": "default",
+    "repo_path": "/path/to/gitops/repo",
+    "remote_url": "git@gitlab.company.com:infrastructure/gitops-clusters.git",
+    "author_name": "Production Deploy",
+    "author_email": "deploy@company.com"
+  }'
+```
+
+### 🖥️ CLI Usage
+
+```bash
+# List available flavors
+python -m src.cli list-flavors
+
+# Preview configuration
+python -m src.cli preview \
   --cluster-name "my-cluster" \
   --site "datacenter-1" \
   --nodes 3 \
   --mce-name "mce-prod" \
   --environment "prod" \
-  --flavor "default" \
-  --dry-run
-```
+  --flavor "default"
 
-### 2. Generate and commit to GitOps repository
-
-```bash
-mce-gen generate \
+# Generate with GitOps integration
+python -m src.cli generate \
   --cluster-name "my-cluster" \
   --site "datacenter-1" \
   --nodes 3 \
@@ -62,45 +116,39 @@ mce-gen generate \
   --repo-path "/path/to/gitops/repo"
 ```
 
-### 3. List available flavors
-
-```bash
-mce-gen list-flavors
-```
-
-### 4. Preview configuration
-
-```bash
-mce-gen preview \
-  --cluster-name "my-cluster" \
-  --site "datacenter-1" \
-  --nodes 3 \
-  --mce-name "mce-prod" \
-  --environment "prod" \
-  --flavor "default"
-```
-
 ## Configuration
 
-### Input Parameters
+### Environment Variables
 
-- **cluster-name**: Kubernetes-compliant cluster name (lowercase, alphanumeric, hyphens)
-- **site**: Site where the cluster will be deployed
-- **nodes**: Number of worker nodes (1-100)
-- **mce-name**: MCE instance name
-- **environment**: Environment type (`prod` or `prep`)
-- **flavor**: Cluster flavor template to use (default: `default`)
+Create a `.env` file based on `.env.example`:
 
-### Available Flavors
+```bash
+# Server Settings
+HOST=0.0.0.0
+PORT=8000
+DEBUG=false
 
-- **default**: Standard cluster configuration
-- **portworks**: PortWorks storage integration
-- **powerflex**: PowerFlex storage integration
+# GitOps Repository Configuration
+GITOPS_REPO_URL=git@gitlab.company.com:infrastructure/gitops-clusters.git
+GITOPS_REPO_PATH=/tmp/gitops-repo
+GITOPS_BRANCH_BASE=main
 
-## Output Structure
+# Git Authentication
+REPO_ACCESS_MODE=ssh
+GIT_SSH_KEY_PATH=/etc/mce-api/ssh_key
+DEFAULT_AUTHOR_NAME=MCE API
+DEFAULT_AUTHOR_EMAIL=mce-api@company.com
 
-The generator creates files following this path structure:
+# Registry Settings
+PRIVATE_REGISTRY=registry.internal.company.com
 
+# Security
+CORS_ORIGINS=https://your-frontend.com,http://localhost:3000
+```
+
+### Repository Structure
+
+Generated files follow this structure:
 ```
 sites/<site>/mce-tenant-cluster/mce-<environment>/<mce-name>/ocp4-<cluster-name>.yaml
 ```
@@ -110,23 +158,31 @@ Example:
 sites/datacenter-1/mce-tenant-cluster/mce-prod/mce-main/ocp4-my-cluster.yaml
 ```
 
-## Template System
+## Available Flavors
 
-### Creating Custom Flavors
+### Built-in Flavors
 
-1. Create a new YAML template in `src/mce_cluster_generator/templates/`
-2. Use Jinja2 syntax for variable substitution
-3. Available variables:
-   - `{{ cluster_name }}`
-   - `{{ number_of_nodes }}`
-   - `{{ site }}`
-   - `{{ mce_name }}`
-   - `{{ environment }}`
-   - `{{ private_registry }}` (default: registry.internal.company.com)
+1. **default**: Standard cluster configuration
+   - Agent-based platform
+   - Classic bare-metal infrastructure
+   - Standard network and machine configs
 
-### Example Template
+2. **portworks**: PortWorks storage integration
+   - PortWorks-specific bare-metal configuration
+   - Additional storage configuration
+   - PortWorks registry mirrors
+
+3. **powerflex**: PowerFlex storage integration
+   - PowerFlex-specific bare-metal configuration
+   - Dell storage configuration
+   - Dell registry mirrors
+
+### Adding New Flavors
+
+1. Create a new YAML template in `src/templates/`:
 
 ```yaml
+# src/templates/my-custom-flavor.yaml
 clusterName: "{{ cluster_name }}"
 platform: agent
 nodePool:
@@ -138,153 +194,210 @@ nodePool:
       maxReplicas: "{{ number_of_nodes + 1 }}"
     agentLabelSelector:
       nodeLabelKey: infraenv
-      nodeLabelValue: classic-baremetal
+      nodeLabelValue: my-custom-baremetal
     configs:
       - "nm-conf-{{ cluster_name }}"
       - worker-kubeconfig
+      - my-custom-config
 mcConfig:
   - "nm-conf-{{ cluster_name }}"
   - worker-kubeconfig
+  - my-custom-config
+idms:
+  mirrors:
+    - source: registry.redhat.io
+      mirrors:
+        - "{{ private_registry }}/redhat"
+    - source: my-custom-registry.com
+      mirrors:
+        - "{{ private_registry }}/my-custom"
 ```
 
-## GitOps Integration
+2. Available template variables:
+   - `{{ cluster_name }}`: Cluster name
+   - `{{ number_of_nodes }}`: Number of worker nodes
+   - `{{ site }}`: Deployment site
+   - `{{ mce_name }}`: MCE instance name
+   - `{{ environment }}`: Environment (prod/prep)
+   - `{{ private_registry }}`: Private registry URL
 
-### Workflow
+3. Restart the API server to pick up the new flavor
 
-1. **Repository Initialization**: Clone or open existing GitOps repository
-2. **Branch Creation**: Create feature branch `add-cluster-<cluster-name>-<site>`
-3. **Path Validation**: Ensure directory structure exists or create it
-4. **File Generation**: Generate cluster configuration file
-5. **Commit**: Commit changes with descriptive message
-6. **Push**: Push branch to remote repository
+### Modifying Existing Flavors
 
-### Manual GitOps Steps
+1. Edit the template file in `src/templates/`
+2. Validate the template:
+   ```bash
+   curl -X GET "http://localhost:8000/api/v1/clusters/flavors/my-flavor/validate"
+   ```
+3. Test with preview:
+   ```bash
+   curl -X POST "http://localhost:8000/api/v1/clusters/preview" \
+     -H "Content-Type: application/json" \
+     -d '{"cluster_name": "test", "site": "test", "number_of_nodes": 1, "mce_name": "test", "environment": "prep", "flavor": "my-flavor"}'
+   ```
 
-After running the generator:
+## API Reference
 
-1. Create a merge/pull request for the generated branch
-2. Review the generated configuration
-3. Merge to main branch
-4. Apply configurations through your GitOps workflow
+### Endpoints
 
-## CLI Reference
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Health check |
+| GET | `/api/v1/clusters/flavors` | List available flavors |
+| GET | `/api/v1/clusters/flavors/{flavor}/validate` | Validate specific flavor |
+| GET | `/api/v1/clusters/flavors/{flavor}/template` | Get raw template content |
+| POST | `/api/v1/clusters/preview` | Preview cluster configuration |
+| POST | `/api/v1/clusters/generate` | Generate cluster configuration |
 
-### Global Options
+### Request Models
 
-- `--log-level`: Set logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-- `--log-file`: Path to log file
+#### Generate/Preview Request
+```json
+{
+  "cluster_name": "string",
+  "site": "string", 
+  "number_of_nodes": 1,
+  "mce_name": "string",
+  "environment": "prod" | "prep",
+  "flavor": "string",
+  "repo_path": "string (optional)",
+  "remote_url": "string (optional)",
+  "author_name": "string (optional)",
+  "author_email": "string (optional)"
+}
+```
 
-### Commands
+### Response Models
 
-#### `generate`
+#### Generate Response
+```json
+{
+  "cluster_name": "string",
+  "output_path": "string",
+  "flavor_used": "string",
+  "dry_run": boolean,
+  "git_info": {
+    "branch_name": "string",
+    "commit_message": "string", 
+    "file_path": "string",
+    "pushed": boolean
+  },
+  "yaml_content": "string (dry-run only)",
+  "generated_at": "datetime",
+  "message": "string"
+}
+```
 
-Generate cluster configuration and optionally commit to GitOps repository.
+## Deployment
 
-Options:
-- `--cluster-name`: Cluster name (required)
-- `--site`: Deployment site (required)
-- `--nodes`: Number of nodes (required)
-- `--mce-name`: MCE instance name (required)
-- `--environment`: Environment (prod/prep) (required)
-- `--flavor`: Template flavor (default: default)
-- `--repo-path`: GitOps repository path
-- `--remote-url`: Remote repository URL
-- `--dry-run`: Generate without Git operations
-- `--output-file`: Output file for dry-run
+### Docker Deployment
 
-#### `list-flavors`
+```dockerfile
+FROM python:3.11-slim
 
-List all available cluster flavors.
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
 
-#### `validate-flavor`
+COPY src/ ./src/
+COPY start.py .
 
-Validate a specific flavor template.
+EXPOSE 8000
+CMD ["python", "start.py"]
+```
 
-#### `preview`
+### Kubernetes Deployment
 
-Preview generated configuration without creating files.
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mce-cluster-generator
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mce-cluster-generator
+  template:
+    metadata:
+      labels:
+        app: mce-cluster-generator
+    spec:
+      containers:
+      - name: api
+        image: mce-cluster-generator:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: GITOPS_REPO_URL
+          value: "git@gitlab.company.com:infrastructure/gitops-clusters.git"
+        - name: PRIVATE_REGISTRY
+          value: "registry.internal.company.com"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mce-cluster-generator
+spec:
+  selector:
+    app: mce-cluster-generator
+  ports:
+  - port: 80
+    targetPort: 8000
+```
 
 ## Development
 
 ### Project Structure
 
 ```
-src/mce_cluster_generator/
-├── __init__.py
-├── cli.py                    # CLI interface
-├── models/                   # Pydantic models
-│   ├── input.py             # Input validation
-│   └── cluster.py           # Cluster configuration
-├── generators/              # Core generation logic
-│   ├── template_loader.py   # Template management
-│   └── cluster_generator.py # Main generator
-├── git_ops/                 # GitOps integration
-│   ├── repository.py        # Git operations
-│   └── path_validator.py    # Path validation
-├── templates/               # Flavor templates
-│   ├── default.yaml
-│   ├── portworks.yaml
-│   └── powerflex.yaml
-└── utils/                   # Utilities
-    ├── logging_config.py    # Logging setup
-    └── exceptions.py        # Custom exceptions
+├── src/
+│   ├── api/                    # FastAPI application
+│   │   ├── models/            # Request/response models
+│   │   └── routers/           # API endpoints
+│   ├── models/                # Core data models
+│   ├── generators/            # Template processing
+│   ├── git_ops/              # GitOps integration
+│   ├── templates/            # Flavor templates
+│   ├── utils/                # Utilities
+│   ├── config.py             # Configuration
+│   ├── main.py               # FastAPI app
+│   └── cli.py                # CLI interface
+├── examples/                 # Usage examples
+├── requirements.txt          # Dependencies
+├── start.py                  # Server startup
+└── .env.example             # Environment template
 ```
 
-### Adding New Features
+### Adding Features
 
-1. **New Flavors**: Add YAML templates in `templates/` directory
-2. **Validation Rules**: Extend Pydantic models in `models/`
-3. **CLI Commands**: Add new commands in `cli.py`
-4. **Error Handling**: Add custom exceptions in `utils/exceptions.py`
+1. **New API endpoints**: Add to `src/api/routers/`
+2. **New validation**: Extend `src/models/`
+3. **New flavors**: Add templates to `src/templates/`
+4. **New utilities**: Add to `src/utils/`
 
 ### Testing
 
 ```bash
-# Run tests (when available)
-pytest tests/
+# Test CLI
+python -m src.cli list-flavors
 
-# Validate a flavor
-mce-gen validate-flavor default
+# Test API
+python start.py &
+curl -X GET "http://localhost:8000/health"
 
-# Test generation with dry-run
-mce-gen generate --cluster-name test --site test --nodes 1 --mce-name test --environment prep --dry-run
+# Run example client
+python examples/api_client_example.py
 ```
-
-## Error Handling
-
-The generator includes comprehensive error handling:
-
-- **ValidationError**: Input parameter validation failures
-- **TemplateError**: Template loading or rendering issues
-- **GitOpsError**: Git operation failures
-- **PathValidationError**: Repository path issues
-- **ConfigurationError**: Configuration problems
-
-## Logging
-
-Logging levels and outputs:
-
-- **DEBUG**: Detailed operation information
-- **INFO**: General operation progress
-- **WARNING**: Non-fatal issues
-- **ERROR**: Operation failures
-- **CRITICAL**: System-level failures
 
 ## Security Considerations
 
-- Validates all input parameters
-- Prevents path traversal attacks
-- Does not expose sensitive information in logs
-- Follows security best practices for Git operations
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Update documentation
-6. Submit a pull request
+- 🔐 Configure proper SSH keys for GitOps access
+- 🛡️ Use HTTPS in production
+- 🔒 Secure private registry credentials
+- 📝 Validate all input parameters
+- 🚫 No secrets in logs or responses
 
 ## License
 
@@ -292,4 +405,6 @@ Logging levels and outputs:
 
 ## Support
 
-For issues and feature requests, please use the GitHub issue tracker.
+- **Documentation**: http://localhost:8000/docs
+- **Issues**: GitHub Issues
+- **API Reference**: http://localhost:8000/redoc

@@ -5,9 +5,9 @@ import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-from ..models.input import ClusterInput
-from ..models.cluster import ClusterConfig
-from .template_loader import TemplateLoader
+from models.input import ClusterInput
+from models.cluster import ClusterConfig
+from generators.template_loader import TemplateLoader
 
 logger = logging.getLogger(__name__)
 
