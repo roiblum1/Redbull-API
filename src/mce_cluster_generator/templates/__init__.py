@@ -1,0 +1,1 @@
+"""Templates package for cluster flavor definitions."""

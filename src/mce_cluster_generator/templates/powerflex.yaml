@@ -1,0 +1,34 @@
+clusterName: "{{ cluster_name }}"
+platform: agent
+nodePool:
+  - name: "{{ cluster_name }}-nodepool"
+    replicas: {{ number_of_nodes }}
+    labels:
+      allowDeletion: false
+      minReplicas: "{{ number_of_nodes - 1 }}"
+      maxReplicas: "{{ number_of_nodes + 1 }}"
+    agentLabelSelector:
+      nodeLabelKey: infraenv
+      nodeLabelValue: powerflex-baremetal
+    configs:
+      - "nm-conf-{{ cluster_name }}"
+      - worker-kubeconfig
+      - powerflex-storage-config
+mcConfig:
+  - "nm-conf-{{ cluster_name }}"
+  - worker-kubeconfig
+  - powerflex-storage-config
+idms:
+  mirrors:
+    - source: registry.redhat.io
+      mirrors:
+        - "{{ private_registry }}/redhat"
+    - source: quay.io
+      mirrors:
+        - "{{ private_registry }}/quay"
+    - source: registry.access.redhat.com
+      mirrors:
+        - "{{ private_registry }}/access-redhat"
+    - source: dell.com
+      mirrors:
+        - "{{ private_registry }}/dell"
