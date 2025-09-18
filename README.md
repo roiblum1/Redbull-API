@@ -146,6 +146,68 @@ PRIVATE_REGISTRY=registry.internal.company.com
 CORS_ORIGINS=https://your-frontend.com,http://localhost:3000
 ```
 
+### GitOps Repository Authentication
+
+#### Password/Token Authentication (HTTPS)
+
+For repositories that require username/password or token authentication:
+
+1. **Set environment variables**:
+```bash
+# Use HTTPS authentication
+REPO_ACCESS_MODE=https
+GITOPS_REPO_URL=https://gitlab.company.com/infrastructure/gitops-clusters.git
+
+# For username/password authentication
+GIT_USERNAME=your-username
+GIT_PASSWORD=your-password
+
+# For token authentication (recommended)
+GIT_USERNAME=your-username
+GIT_PASSWORD=your-personal-access-token
+```
+
+2. **GitHub Personal Access Token**:
+   - Go to GitHub Settings → Developer settings → Personal access tokens
+   - Generate new token with `repo` permissions
+   - Use token as `GIT_PASSWORD`
+
+3. **GitLab Personal Access Token**:
+   - Go to GitLab User Settings → Access Tokens
+   - Create token with `write_repository` scope
+   - Use token as `GIT_PASSWORD`
+
+4. **Azure DevOps Personal Access Token**:
+   - Go to User Settings → Personal Access Tokens
+   - Create token with `Code (read & write)` permissions
+   - Use token as `GIT_PASSWORD`
+
+#### Example configurations:
+
+**GitHub with Token**:
+```bash
+REPO_ACCESS_MODE=https
+GITOPS_REPO_URL=https://github.com/your-org/gitops-clusters.git
+GIT_USERNAME=your-github-username
+GIT_PASSWORD=ghp_your_personal_access_token
+```
+
+**GitLab with Token**:
+```bash
+REPO_ACCESS_MODE=https
+GITOPS_REPO_URL=https://gitlab.company.com/infrastructure/gitops-clusters.git
+GIT_USERNAME=your-gitlab-username
+GIT_PASSWORD=glpat-your_personal_access_token
+```
+
+**Corporate Git with Username/Password**:
+```bash
+REPO_ACCESS_MODE=https
+GITOPS_REPO_URL=https://git.company.com/infrastructure/gitops-clusters.git
+GIT_USERNAME=your-domain-username
+GIT_PASSWORD=your-domain-password
+```
+
 ### Repository Structure
 
 Generated files follow this structure:
@@ -293,18 +355,110 @@ idms:
 
 ### Docker Deployment
 
-```dockerfile
-FROM python:3.11-slim
+#### Quick Start with Docker
 
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+1. **Build and run with Docker**:
+```bash
+# Build the image
+docker build -t mce-cluster-generator .
 
-COPY src/ ./src/
-COPY start.py .
+# Run with environment variables
+docker run -d \
+  -p 8000:8000 \
+  -e GITOPS_REPO_URL="https://github.com/your-org/gitops-clusters.git" \
+  -e GIT_USERNAME="your-username" \
+  -e GIT_PASSWORD="your-token" \
+  -e REPO_ACCESS_MODE="https" \
+  --name mce-api \
+  mce-cluster-generator
+```
 
-EXPOSE 8000
-CMD ["python", "start.py"]
+2. **Using Docker Compose** (recommended):
+```bash
+# Copy environment template
+cp .env.example .env
+
+# Edit .env with your configuration
+nano .env
+
+# Start the service
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop the service
+docker-compose down
+```
+
+#### Environment Configuration for Docker
+
+Create a `.env` file for Docker Compose:
+
+```bash
+# GitOps Repository (required for full functionality)
+GITOPS_REPO_URL=https://github.com/your-org/gitops-clusters.git
+
+# For HTTPS authentication
+REPO_ACCESS_MODE=https
+GIT_USERNAME=your-username
+GIT_PASSWORD=your-personal-access-token
+
+# For SSH authentication (advanced)
+REPO_ACCESS_MODE=ssh
+SSH_KEY_PATH=./ssh-keys
+
+# Optional settings
+DEFAULT_AUTHOR_NAME=MCE API Docker
+DEFAULT_AUTHOR_EMAIL=mce-api@company.com
+PRIVATE_REGISTRY=registry.internal.company.com
+CORS_ORIGINS=*
+```
+
+#### SSH Key Setup for Docker
+
+If using SSH authentication:
+
+1. **Create SSH key directory**:
+```bash
+mkdir -p ssh-keys
+chmod 700 ssh-keys
+```
+
+2. **Copy your SSH private key**:
+```bash
+cp ~/.ssh/id_rsa ssh-keys/id_rsa
+chmod 600 ssh-keys/id_rsa
+```
+
+3. **Update docker-compose.yml SSH_KEY_PATH**:
+```bash
+SSH_KEY_PATH=./ssh-keys
+```
+
+#### Production Docker Setup
+
+For production deployment with security best practices:
+
+```bash
+# Create dedicated network
+docker network create mce-network
+
+# Run with production settings
+docker run -d \
+  --name mce-api-prod \
+  --network mce-network \
+  -p 8000:8000 \
+  -e DEBUG=false \
+  -e LOG_LEVEL=WARNING \
+  -e GITOPS_REPO_URL="your-repo-url" \
+  -e GIT_USERNAME="production-user" \
+  -e GIT_PASSWORD="production-token" \
+  -e CORS_ORIGINS="https://your-production-frontend.com" \
+  -v /secure/path/to/logs:/app/logs \
+  -v /secure/path/to/gitops:/app/gitops-repos \
+  --restart unless-stopped \
+  mce-cluster-generator
 ```
 
 ### Kubernetes Deployment

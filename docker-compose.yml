@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  mce-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Server settings
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      
+      # GitOps Repository Configuration
+      - GITOPS_REPO_URL=${GITOPS_REPO_URL:-}
+      - GITOPS_REPO_PATH=/app/gitops-repos/cluster-configs
+      - GITOPS_BRANCH_BASE=${GITOPS_BRANCH_BASE:-main}
+      
+      # Git Authentication
+      - REPO_ACCESS_MODE=${REPO_ACCESS_MODE:-ssh}
+      - GIT_SSH_KEY_PATH=/app/.ssh/id_rsa
+      - GIT_USERNAME=${GIT_USERNAME:-}
+      - GIT_PASSWORD=${GIT_PASSWORD:-}
+      - DEFAULT_AUTHOR_NAME=${DEFAULT_AUTHOR_NAME:-MCE API}
+      - DEFAULT_AUTHOR_EMAIL=${DEFAULT_AUTHOR_EMAIL:-mce-api@company.com}
+      
+      # Registry Settings
+      - PRIVATE_REGISTRY=${PRIVATE_REGISTRY:-registry.internal.company.com}
+      
+      # Security
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - API_KEY=${API_KEY:-}
+      
+      # Operational
+      - MAX_NODES=${MAX_NODES:-100}
+      - DEFAULT_FLAVOR=${DEFAULT_FLAVOR:-default}
+    
+    volumes:
+      # Mount SSH keys for GitOps authentication
+      - ${SSH_KEY_PATH:-./ssh-keys}:/app/.ssh:ro
+      # Mount GitOps repository workspace
+      - gitops-repos:/app/gitops-repos
+      # Mount logs directory
+      - ./logs:/app/logs
+      # Mount custom templates (optional)
+      - ${TEMPLATES_DIR:-./src/templates}:/app/src/templates:ro
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  gitops-repos:
