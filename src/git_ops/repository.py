@@ -6,7 +6,7 @@ from typing import Optional
 import git
 from git import Repo, GitCommandError
 
-from .path_validator import PathValidator
+from git_ops.path_validator import PathValidator
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +37,20 @@ class GitRepository:
                 self.repo = Repo(self.repo_path)
                 logger.info(f"Opened existing repository: {self.repo_path}")
             elif self.remote_url:
-                # Clone repository
+                # Clone repository with authentication support
                 logger.info(f"Cloning repository from {self.remote_url} to {self.repo_path}")
-                self.repo = Repo.clone_from(self.remote_url, self.repo_path)
+                
+                # Set up authentication environment if needed
+                env = {}
+                if self.remote_url.startswith('https://') and hasattr(self, '_username') and hasattr(self, '_password'):
+                    # For HTTPS with username/password
+                    auth_url = self.remote_url.replace('https://', f'https://{self._username}:{self._password}@')
+                    self.repo = Repo.clone_from(auth_url, self.repo_path)
+                else:
+                    # For SSH or public repositories
+                    self.repo = Repo.clone_from(self.remote_url, self.repo_path)
+                    
+                logger.info(f"Successfully cloned repository")
             else:
                 # Initialize new repository
                 self.repo_path.mkdir(parents=True, exist_ok=True)
@@ -49,6 +60,18 @@ class GitRepository:
         except Exception as e:
             logger.error(f"Failed to initialize repository: {e}")
             raise RuntimeError(f"Repository initialization failed: {e}")
+    
+    def set_credentials(self, username: str = None, password: str = None):
+        """Set Git credentials for HTTPS authentication.
+        
+        Args:
+            username: Git username
+            password: Git password or token
+        """
+        if username:
+            self._username = username
+        if password:
+            self._password = password
     
     def create_branch(self, branch_name: str, base_branch: str = "main") -> bool:
         """Create a new branch for the cluster configuration.
