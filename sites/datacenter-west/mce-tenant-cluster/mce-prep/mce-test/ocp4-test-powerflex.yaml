@@ -1,0 +1,34 @@
+clusterName: test-powerflex
+platform: agent
+nodePool:
+- name: test-powerflex-nodepool
+  replicas: 2
+  labels:
+    allowDeletion: false
+    minReplicas: '1'
+    maxReplicas: '3'
+  agentLabelSelector:
+    nodeLabelKey: infraenv
+    nodeLabelValue: powerflex-baremetal
+  configs:
+  - nm-conf-test-powerflex
+  - worker-kubeconfig
+  - powerflex-storage-config
+mcConfig:
+- nm-conf-test-powerflex
+- worker-kubeconfig
+- powerflex-storage-config
+idms:
+  mirrors:
+  - source: registry.redhat.io
+    mirrors:
+    - registry.internal.company.com/redhat
+  - source: quay.io
+    mirrors:
+    - registry.internal.company.com/quay
+  - source: registry.access.redhat.com
+    mirrors:
+    - registry.internal.company.com/access-redhat
+  - source: dell.com
+    mirrors:
+    - registry.internal.company.com/dell
