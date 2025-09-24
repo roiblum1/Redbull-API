@@ -50,34 +50,3 @@ class ClusterConfig(BaseModel):
     mcConfig: List[str]
     idms: Optional[IDMSConfig] = Field(default=None)
 
-    class Config:
-        """Pydantic config."""
-        json_schema_extra = {
-            "example": {
-                "clusterName": "roi-cluster",
-                "platform": "agent",
-                "nodePool": [
-                    {
-                        "name": "roi-cluster-nodepool",
-                        "replicas": 3,
-                        "labels": {
-                            "allowDeletion": False,
-                            "minReplicas": "2",
-                            "maxReplicas": "4"
-                        },
-                        "agentLabelSelector": {
-                            "nodeLabelKey": "infraenv",
-                            "nodeLabelValue": "classic-baremetal"
-                        },
-                        "configs": [
-                            "nm-conf-roi-cluster",
-                            "worker-kubeconfig"
-                        ]
-                    }
-                ],
-                "mcConfig": [
-                    "nm-conf-roi-cluster",
-                    "worker-kubeconfig"
-                ]
-            }
-        }

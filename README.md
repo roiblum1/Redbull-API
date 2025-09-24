@@ -1,15 +1,13 @@
 # MCE Cluster Generator
 
-A comprehensive tool for generating cluster configurations for MCE (Multi-Cluster Engine) environments with GitOps integration. Available as both **CLI tool** and **REST API**.
+A comprehensive REST API for generating cluster configurations for MCE (Multi-Cluster Engine) environments with GitOps integration.
 
 ## Features
 
-- **🎯 Dual Interface**: Both CLI and REST API for maximum flexibility
 - **📋 Flexible Template System**: YAML-based templates for different cluster flavors
 - **✅ Comprehensive Validation**: Pydantic-based validation for all input parameters
 - **🔄 GitOps Integration**: Automatic branch creation, file generation, and commit/push workflows
 - **📁 Path Management**: Ensures correct repository structure exists or creates it
-- **🎨 Rich CLI Interface**: User-friendly command-line interface with colored output
 - **📡 REST API**: Full-featured API with automatic documentation
 - **📊 Extensive Logging**: Configurable logging with file and console output
 - **🛡️ Error Handling**: Comprehensive error handling with custom exceptions
@@ -90,31 +88,6 @@ curl -X POST "http://localhost:8000/api/v1/clusters/generate" \
   }'
 ```
 
-### 🖥️ CLI Usage
-
-```bash
-# List available flavors
-python -m src.cli list-flavors
-
-# Preview configuration
-python -m src.cli preview \
-  --cluster-name "my-cluster" \
-  --site "datacenter-1" \
-  --nodes 3 \
-  --mce-name "mce-prod" \
-  --environment "prod" \
-  --flavor "default"
-
-# Generate with GitOps integration
-python -m src.cli generate \
-  --cluster-name "my-cluster" \
-  --site "datacenter-1" \
-  --nodes 3 \
-  --mce-name "mce-prod" \
-  --environment "prod" \
-  --flavor "default" \
-  --repo-path "/path/to/gitops/repo"
-```
 
 ## Configuration
 
@@ -516,8 +489,7 @@ spec:
 │   ├── templates/            # Flavor templates
 │   ├── utils/                # Utilities
 │   ├── config.py             # Configuration
-│   ├── main.py               # FastAPI app
-│   └── cli.py                # CLI interface
+│   └── main.py               # FastAPI app
 ├── examples/                 # Usage examples
 ├── requirements.txt          # Dependencies
 ├── start.py                  # Server startup
@@ -534,9 +506,6 @@ spec:
 ### Testing
 
 ```bash
-# Test CLI
-python -m src.cli list-flavors
-
 # Test API
 python start.py &
 curl -X GET "http://localhost:8000/health"
