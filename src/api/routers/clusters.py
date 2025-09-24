@@ -320,3 +320,40 @@ async def get_flavor_template(flavor_name: str):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get template: {str(e)}"
         )
+
+
+@router.get(
+    "/flavors/{flavor_name}/variables",
+    summary="Get template variables",
+    description="Get all variables used in a specific flavor template"
+)
+async def get_template_variables(flavor_name: str):
+    """Get all variables used in a template."""
+    try:
+        generator = ClusterGenerator()
+        
+        if not generator.validate_flavor(flavor_name):
+            available_flavors = generator.list_available_flavors()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Flavor '{flavor_name}' not found. Available flavors: {', '.join(available_flavors)}"
+            )
+        
+        # Get template variables
+        template_vars = generator.template_loader.get_template_variables(flavor_name)
+        
+        return {
+            "flavor": flavor_name,
+            "variables": sorted(list(template_vars)),
+            "total": len(template_vars),
+            "message": f"Found {len(template_vars)} variables in template '{flavor_name}'"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting template variables: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get template variables: {str(e)}"
+        )

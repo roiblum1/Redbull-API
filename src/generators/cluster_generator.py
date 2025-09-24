@@ -77,13 +77,28 @@ class ClusterGenerator:
         Returns:
             YAML content as string.
         """
-        cluster_config = self.generate_cluster_config(input_params)
-        return yaml.dump(
-            cluster_config.model_dump(), 
-            default_flow_style=False, 
-            sort_keys=False,
-            indent=2
-        )
+        logger.info(f"Generating YAML content for: {input_params.cluster_name}")
+        
+        # Prepare template variables
+        template_vars = {
+            "cluster_name": input_params.cluster_name,
+            "number_of_nodes": input_params.number_of_nodes,
+            "site": input_params.site,
+            "mce_name": input_params.mce_name,
+            "environment": input_params.environment
+        }
+        
+        # Render template directly to preserve custom variables
+        try:
+            rendered_yaml = self.template_loader.render_template(
+                input_params.flavor, 
+                template_vars
+            )
+            logger.debug(f"Template rendered successfully for flavor: {input_params.flavor}")
+            return rendered_yaml
+        except Exception as e:
+            logger.error(f"Failed to render template: {e}")
+            raise ValueError(f"Template rendering failed: {e}")
     
     def get_output_path(self, input_params: ClusterInput) -> Path:
         """Generate the output file path for the cluster configuration.
