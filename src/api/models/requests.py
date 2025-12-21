@@ -1,7 +1,27 @@
 """Request models for API endpoints."""
 
-from typing import Optional, Literal
+from typing import Literal, List
 from pydantic import BaseModel, Field
+
+
+class VendorConfigRequest(BaseModel):
+    """Configuration for a specific vendor nodepool."""
+    
+    vendor: str = Field(
+        ...,
+        description="Hardware vendor name (cisco, dell, dell-data, h100-gpu, h200-gpu)"
+    )
+    number_of_nodes: int = Field(
+        ...,
+        ge=1,
+        le=100,
+        description="Number of worker nodes for this vendor"
+    )
+    infra_env_name: str = Field(
+        ...,
+        min_length=1,
+        description="Infrastructure environment name for this vendor"
+    )
 
 
 class GenerateClusterRequest(BaseModel):
@@ -19,55 +39,47 @@ class GenerateClusterRequest(BaseModel):
         min_length=1,
         description="Site where the cluster will be deployed"
     )
-    number_of_nodes: int = Field(
-        ...,
-        ge=1,
-        le=100,
-        description="Number of worker nodes in the cluster"
-    )
-    mce_name: str = Field(
+    vendor_configs: List[VendorConfigRequest] = Field(
         ...,
         min_length=1,
-        description="MCE instance name"
+        description="List of vendor configurations (each with vendor, nodes, and infra_env)"
     )
-    environment: Literal["prod", "prep"] = Field(
-        ...,
-        description="Environment type: production or preparation"
+    ocp_version: Literal["4.15", "4.16"] = Field(
+        default="4.16",
+        description="OpenShift version (determines imageContentSources)"
     )
-    flavor: str = Field(
-        default="default",
-        description="Cluster flavor template to use"
+    dns_domain: str = Field(
+        default="example.company.com",
+        description="DNS domain/zone for the cluster"
     )
-    repo_path: Optional[str] = Field(
-        default=None,
-        description="Path to GitOps repository (if not provided, dry-run mode)"
+    include_var_lib_containers: bool = Field(
+        default=False,
+        description="Include 98-var-lib-containers machine config"
     )
-    remote_url: Optional[str] = Field(
-        default=None,
-        description="Remote repository URL for cloning"
+    include_ringsize: bool = Field(
+        default=False,
+        description="Include ringsize machine config"
     )
-    author_name: str = Field(
-        default="MCE API",
-        description="Author name for Git commits"
-    )
-    author_email: str = Field(
-        default="mce-api@company.com",
-        description="Author email for Git commits"
+    custom_configs: List[str] = Field(
+        default_factory=list,
+        description="Additional custom machine config names to include"
     )
 
     class Config:
         """Pydantic config."""
         json_schema_extra = {
             "example": {
-                "cluster_name": "api-cluster",
+                "cluster_name": "my-production-cluster",
                 "site": "datacenter-1",
-                "number_of_nodes": 3,
-                "mce_name": "mce-prod",
-                "environment": "prod",
-                "flavor": "default",
-                "repo_path": "/path/to/gitops/repo",
-                "author_name": "API User",
-                "author_email": "user@company.com"
+                "vendor_configs": [
+                    {"vendor": "dell", "number_of_nodes": 5, "infra_env_name": "dell-prod-env"},
+                    {"vendor": "cisco", "number_of_nodes": 3, "infra_env_name": "cisco-prod-env"}
+                ],
+                "ocp_version": "4.16",
+                "dns_domain": "prod.company.com",
+                "include_var_lib_containers": True,
+                "include_ringsize": False,
+                "custom_configs": ["custom-network-config"]
             }
         }
 
@@ -87,24 +99,30 @@ class PreviewClusterRequest(BaseModel):
         min_length=1,
         description="Site where the cluster will be deployed"
     )
-    number_of_nodes: int = Field(
-        ...,
-        ge=1,
-        le=100,
-        description="Number of worker nodes in the cluster"
-    )
-    mce_name: str = Field(
+    vendor_configs: List[VendorConfigRequest] = Field(
         ...,
         min_length=1,
-        description="MCE instance name"
+        description="List of vendor configurations"
     )
-    environment: Literal["prod", "prep"] = Field(
-        ...,
-        description="Environment type: production or preparation"
+    ocp_version: Literal["4.15", "4.16"] = Field(
+        default="4.16",
+        description="OpenShift version"
     )
-    flavor: str = Field(
-        default="default",
-        description="Cluster flavor template to use"
+    dns_domain: str = Field(
+        default="example.company.com",
+        description="DNS domain/zone"
+    )
+    include_var_lib_containers: bool = Field(
+        default=False,
+        description="Include 98-var-lib-containers config"
+    )
+    include_ringsize: bool = Field(
+        default=False,
+        description="Include ringsize config"
+    )
+    custom_configs: List[str] = Field(
+        default_factory=list,
+        description="Additional custom configs"
     )
 
     class Config:
@@ -113,9 +131,10 @@ class PreviewClusterRequest(BaseModel):
             "example": {
                 "cluster_name": "preview-cluster",
                 "site": "datacenter-1",
-                "number_of_nodes": 3,
-                "mce_name": "mce-prod",
-                "environment": "prod",
-                "flavor": "default"
+                "vendor_configs": [
+                    {"vendor": "dell", "number_of_nodes": 3, "infra_env_name": "test-infra-env"}
+                ],
+                "ocp_version": "4.16",
+                "dns_domain": "test.company.com"
             }
         }

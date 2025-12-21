@@ -2,16 +2,20 @@
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 
 class Settings:
-    """Application settings."""
+    """Application settings.
+    
+    This class centralizes all configuration for the application,
+    loading from environment variables with sensible defaults.
+    """
     
     # Application info
     APP_NAME: str = "MCE Cluster Generator API"
-    APP_VERSION: str = "1.0.0"
-    APP_DESCRIPTION: str = "API for generating MCE cluster configurations with GitOps integration"
+    APP_VERSION: str = "2.0.0"
+    APP_DESCRIPTION: str = "API for generating MCE cluster configurations with UI"
     
     # Server settings
     HOST: str = os.getenv("HOST", "0.0.0.0")
@@ -22,43 +26,41 @@ class Settings:
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     LOG_FILE: Optional[str] = os.getenv("LOG_FILE")
     
-    # GitOps Repository Configuration
-    GITOPS_REPO_URL: str = os.getenv("GITOPS_REPO_URL", "")
-    GITOPS_REPO_PATH: str = os.getenv("GITOPS_REPO_PATH", "")
-    GITOPS_BRANCH_BASE: str = os.getenv("GITOPS_BRANCH_BASE", "main")
-    
-    # Git authentication
-    GIT_SSH_KEY_PATH: Optional[str] = os.getenv("GIT_SSH_KEY_PATH")  # Path to SSH private key
-    GIT_USERNAME: Optional[str] = os.getenv("GIT_USERNAME")  # For HTTPS auth
-    GIT_PASSWORD: Optional[str] = os.getenv("GIT_PASSWORD")  # For HTTPS auth or token
-    
-    # Git commit settings
-    DEFAULT_AUTHOR_NAME: str = os.getenv("DEFAULT_AUTHOR_NAME", "MCE API")
-    DEFAULT_AUTHOR_EMAIL: str = os.getenv("DEFAULT_AUTHOR_EMAIL", "mce-api@company.com")
-    
-    # Repository access mode
-    REPO_ACCESS_MODE: str = os.getenv("REPO_ACCESS_MODE", "ssh")  # "ssh" or "https"
-    
-    # Template settings
-    TEMPLATES_DIR: Optional[str] = os.getenv("TEMPLATES_DIR")
+    # Defaults settings
+    DEFAULTS_DIR: Optional[str] = os.getenv("DEFAULTS_DIR")
     
     # Private registry settings
     PRIVATE_REGISTRY: str = os.getenv("PRIVATE_REGISTRY", "registry.internal.company.com")
     
+    # Default DNS domain
+    DEFAULT_DNS_DOMAIN: str = os.getenv("DEFAULT_DNS_DOMAIN", "example.company.com")
+    
+    # Default OpenShift version
+    DEFAULT_OCP_VERSION: str = os.getenv("DEFAULT_OCP_VERSION", "4.16")
+    
     # Security settings
-    API_KEY: Optional[str] = os.getenv("API_KEY")
     CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "*")
     
     # Operational settings
     MAX_NODES: int = int(os.getenv("MAX_NODES", "100"))
-    DEFAULT_FLAVOR: str = os.getenv("DEFAULT_FLAVOR", "default")
+    
+    # Supported versions (comma-separated in env var)
+    SUPPORTED_VERSIONS: List[str] = os.getenv(
+        "SUPPORTED_VERSIONS", "4.15,4.16"
+    ).split(",")
+    
+    # Supported vendors (comma-separated in env var)
+    SUPPORTED_VENDORS: List[str] = os.getenv(
+        "SUPPORTED_VENDORS", 
+        "cisco,dell,dell-data,h100-gpu,h200-gpu"
+    ).split(",")
     
     @property
-    def templates_path(self) -> Path:
-        """Get templates directory path."""
-        if self.TEMPLATES_DIR:
-            return Path(self.TEMPLATES_DIR)
-        return Path(__file__).parent / "templates"
+    def defaults_path(self) -> Path:
+        """Get defaults directory path."""
+        if self.DEFAULTS_DIR:
+            return Path(self.DEFAULTS_DIR)
+        return Path(__file__).parent / "defaults"
     
     @property
     def cors_origins_list(self) -> list[str]:
@@ -66,6 +68,11 @@ class Settings:
         if self.CORS_ORIGINS == "*":
             return ["*"]
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+    
+    @property
+    def static_files_path(self) -> Path:
+        """Get static files directory path for UI."""
+        return Path(__file__).parent / "static"
 
 
 # Global settings instance

@@ -1,29 +1,135 @@
 """Cluster management API endpoints."""
 
 import logging
-from pathlib import Path
-from typing import Optional
-from fastapi import APIRouter, HTTPException, status, BackgroundTasks
+from typing import Dict
+from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import PlainTextResponse
 
-from models.input import ClusterInput
-from generators.cluster_generator import ClusterGenerator
-from git_ops.repository import GitRepository
+from models.input import ClusterGenerationInput, VendorConfig
+from generators.cluster_builder import ClusterConfigGenerator
+from defaults.defaults_manager import DefaultsManager
 from utils.exceptions import MCEGeneratorError
 from config import settings
-from api.models.requests import GenerateClusterRequest, PreviewClusterRequest
+from api.models.requests import (
+    GenerateClusterRequest,
+    PreviewClusterRequest
+)
 from api.models.responses import (
-    GenerateClusterResponse, 
-    PreviewClusterResponse, 
-    FlavorListResponse,
-    ValidateFlavorResponse,
-    FlavorInfo,
-    GitInfo,
-    ErrorResponse
+    GenerateClusterResponse,
+    PreviewClusterResponse,
+    DefaultsResponse,
+    VendorInfo,
+    VersionInfo,
+    ConfigInfo
 )
 
 router = APIRouter(prefix="/clusters", tags=["clusters"])
 logger = logging.getLogger(__name__)
+
+# Initialize generator and defaults manager
+generator = ClusterConfigGenerator()
+defaults_manager = DefaultsManager()
+
+
+# Vendor display names mapping
+VENDOR_DISPLAY_NAMES: Dict[str, str] = {
+    "cisco": "Cisco UCS",
+    "dell": "Dell PowerEdge",
+    "dell-data": "Dell Data Services",
+    "h100-gpu": "NVIDIA H100 GPU",
+    "h200-gpu": "NVIDIA H200 GPU"
+}
+
+
+@router.get(
+    "/defaults",
+    response_model=DefaultsResponse,
+    summary="Get default values",
+    description="Get all default values for cluster generation"
+)
+async def get_defaults():
+    """Get all default values for cluster configuration."""
+    try:
+        vendors = [
+            VendorInfo(
+                name=v,
+                display_name=VENDOR_DISPLAY_NAMES.get(v, v.title())
+            )
+            for v in defaults_manager.get_supported_vendors()
+        ]
+        
+        versions = [
+            VersionInfo(
+                version=v,
+                is_default=(v == settings.DEFAULT_OCP_VERSION)
+            )
+            for v in defaults_manager.get_supported_versions()
+        ]
+        
+        optional_configs = [
+            ConfigInfo(
+                key="var_lib_containers",
+                name="98-var-lib-containers",
+                description="Configure /var/lib/containers storage",
+                is_optional=True
+            ),
+            ConfigInfo(
+                key="ringsize",
+                name="ringsize",
+                description="Network ring buffer size configuration",
+                is_optional=True
+            )
+        ]
+        
+        return DefaultsResponse(
+            vendors=vendors,
+            versions=versions,
+            default_configs=defaults_manager.get_default_configs(),
+            optional_configs=optional_configs,
+            default_dns_domain=defaults_manager.get_default_dns_domain()
+        )
+    
+    except Exception as e:
+        logger.error(f"Error getting defaults: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get defaults: {str(e)}"
+        )
+
+
+@router.get(
+    "/vendors",
+    summary="List available vendors",
+    description="Get a list of all available hardware vendors"
+)
+async def list_vendors():
+    """List all available hardware vendors."""
+    vendors = defaults_manager.get_supported_vendors()
+    return {
+        "vendors": [
+            {
+                "name": v,
+                "display_name": VENDOR_DISPLAY_NAMES.get(v, v.title())
+            }
+            for v in vendors
+        ],
+        "total": len(vendors)
+    }
+
+
+@router.get(
+    "/versions",
+    summary="List available OpenShift versions",
+    description="Get a list of all supported OpenShift versions"
+)
+async def list_versions():
+    """List all supported OpenShift versions."""
+    versions = defaults_manager.get_supported_versions()
+    return {
+        "versions": versions,
+        "default": settings.DEFAULT_OCP_VERSION,
+        "total": len(versions)
+    }
 
 
 @router.post(
@@ -31,110 +137,57 @@ logger = logging.getLogger(__name__)
     response_model=GenerateClusterResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Generate cluster configuration",
-    description="Generate a cluster configuration and optionally commit to GitOps repository"
+    description="Generate a cluster configuration YAML with per-vendor node counts and infra environments"
 )
 async def generate_cluster(request: GenerateClusterRequest):
-    """Generate cluster configuration with optional GitOps integration."""
+    """Generate cluster configuration."""
     try:
         logger.info(f"Generating cluster configuration for: {request.cluster_name}")
         
-        # Convert request to ClusterInput
-        cluster_input = ClusterInput(
+        # Validate vendors
+        valid_vendors = set(defaults_manager.get_supported_vendors())
+        for vc in request.vendor_configs:
+            if vc.vendor not in valid_vendors:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid vendor: {vc.vendor}. Valid vendors: {', '.join(sorted(valid_vendors))}"
+                )
+        
+        # Convert request to ClusterGenerationInput
+        vendor_configs = [
+            VendorConfig(
+                vendor=vc.vendor,
+                number_of_nodes=vc.number_of_nodes,
+                infra_env_name=vc.infra_env_name
+            )
+            for vc in request.vendor_configs
+        ]
+        
+        cluster_input = ClusterGenerationInput(
             cluster_name=request.cluster_name,
             site=request.site,
-            number_of_nodes=request.number_of_nodes,
-            mce_name=request.mce_name,
-            environment=request.environment,
-            flavor=request.flavor
+            vendor_configs=vendor_configs,
+            ocp_version=request.ocp_version,
+            dns_domain=request.dns_domain,
+            include_var_lib_containers=request.include_var_lib_containers,
+            include_ringsize=request.include_ringsize,
+            custom_configs=request.custom_configs
         )
         
-        # Initialize generator
-        generator = ClusterGenerator()
+        # Generate YAML
+        yaml_content = generator.generate_yaml(cluster_input)
         
-        # Validate flavor
-        if not generator.validate_flavor(request.flavor):
-            available_flavors = generator.list_available_flavors()
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid flavor '{request.flavor}'. Available flavors: {', '.join(available_flavors)}"
-            )
+        # Get vendor names for response
+        vendors_used = [vc.vendor for vc in request.vendor_configs]
         
-        # Generate configuration
-        yaml_content = generator.generate_yaml_content(cluster_input)
-        output_path = generator.get_output_path(cluster_input)
-        
-        # Use configured repository or request override
-        repo_path = request.repo_path or settings.GITOPS_REPO_PATH
-        remote_url = request.remote_url or settings.GITOPS_REPO_URL
-        
-        # Determine if this is a dry run (no repo configured)
-        is_dry_run = not repo_path or not remote_url
-        
-        if is_dry_run:
-            # Dry run mode - just return the configuration
-            return GenerateClusterResponse(
-                cluster_name=request.cluster_name,
-                output_path=str(output_path),
-                flavor_used=request.flavor,
-                dry_run=True,
-                yaml_content=yaml_content,
-                message="Cluster configuration generated successfully (dry-run mode)"
-            )
-        
-        # GitOps integration
-        try:
-            git_repo = GitRepository(Path(repo_path), remote_url)
-            
-            # Generate branch name and create branch
-            branch_name = git_repo.generate_branch_name(request.cluster_name, request.site)
-            
-            if not git_repo.create_branch(branch_name):
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Failed to create Git branch"
-                )
-            
-            # Add file to repository
-            if not git_repo.add_file(output_path, yaml_content):
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Failed to add file to repository"
-                )
-            
-            # Commit changes
-            commit_message = f"Add cluster configuration for {request.cluster_name} in {request.site}\n\nCluster: {request.cluster_name}\nSite: {request.site}\nEnvironment: {request.environment}\nNodes: {request.number_of_nodes}\nFlavor: {request.flavor}"
-            
-            if not git_repo.commit_changes(commit_message, request.author_name, request.author_email):
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Failed to commit changes"
-                )
-            
-            # Try to push branch
-            pushed = git_repo.push_branch(branch_name)
-            
-            git_info = GitInfo(
-                branch_name=branch_name,
-                commit_message=commit_message,
-                file_path=str(output_path),
-                pushed=pushed
-            )
-            
-            return GenerateClusterResponse(
-                cluster_name=request.cluster_name,
-                output_path=str(output_path),
-                flavor_used=request.flavor,
-                dry_run=False,
-                git_info=git_info,
-                message=f"Cluster configuration generated and committed to branch '{branch_name}'"
-            )
-            
-        except Exception as e:
-            logger.error(f"GitOps operation failed: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"GitOps operation failed: {str(e)}"
-            )
+        return GenerateClusterResponse(
+            cluster_name=request.cluster_name,
+            yaml_content=yaml_content,
+            vendors_used=vendors_used,
+            ocp_version=request.ocp_version,
+            nodepool_count=len(request.vendor_configs),
+            message=f"Cluster configuration generated successfully with {len(request.vendor_configs)} nodepool(s)"
+        )
     
     except MCEGeneratorError as e:
         logger.error(f"Generator error: {e.message}")
@@ -156,43 +209,54 @@ async def generate_cluster(request: GenerateClusterRequest):
     "/preview",
     response_model=PreviewClusterResponse,
     summary="Preview cluster configuration",
-    description="Generate and preview cluster configuration without creating files"
+    description="Generate and preview cluster configuration without any side effects"
 )
 async def preview_cluster(request: PreviewClusterRequest):
-    """Preview cluster configuration without creating files."""
+    """Preview cluster configuration."""
     try:
         logger.info(f"Previewing cluster configuration for: {request.cluster_name}")
         
-        # Convert request to ClusterInput
-        cluster_input = ClusterInput(
+        # Validate vendors
+        valid_vendors = set(defaults_manager.get_supported_vendors())
+        for vc in request.vendor_configs:
+            if vc.vendor not in valid_vendors:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid vendor: {vc.vendor}. Valid vendors: {', '.join(sorted(valid_vendors))}"
+                )
+        
+        # Convert request to ClusterGenerationInput
+        vendor_configs = [
+            VendorConfig(
+                vendor=vc.vendor,
+                number_of_nodes=vc.number_of_nodes,
+                infra_env_name=vc.infra_env_name
+            )
+            for vc in request.vendor_configs
+        ]
+        
+        cluster_input = ClusterGenerationInput(
             cluster_name=request.cluster_name,
             site=request.site,
-            number_of_nodes=request.number_of_nodes,
-            mce_name=request.mce_name,
-            environment=request.environment,
-            flavor=request.flavor
+            vendor_configs=vendor_configs,
+            ocp_version=request.ocp_version,
+            dns_domain=request.dns_domain,
+            include_var_lib_containers=request.include_var_lib_containers,
+            include_ringsize=request.include_ringsize,
+            custom_configs=request.custom_configs
         )
         
-        # Initialize generator
-        generator = ClusterGenerator()
+        # Generate YAML
+        yaml_content = generator.generate_yaml(cluster_input)
         
-        # Validate flavor
-        if not generator.validate_flavor(request.flavor):
-            available_flavors = generator.list_available_flavors()
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid flavor '{request.flavor}'. Available flavors: {', '.join(available_flavors)}"
-            )
-        
-        # Generate configuration
-        yaml_content = generator.generate_yaml_content(cluster_input)
-        output_path = generator.get_output_path(cluster_input)
+        vendors_used = [vc.vendor for vc in request.vendor_configs]
         
         return PreviewClusterResponse(
             cluster_name=request.cluster_name,
-            output_path=str(output_path),
             yaml_content=yaml_content,
-            flavor_used=request.flavor
+            vendors_used=vendors_used,
+            ocp_version=request.ocp_version,
+            nodepool_count=len(request.vendor_configs)
         )
     
     except MCEGeneratorError as e:
@@ -208,152 +272,4 @@ async def preview_cluster(request: PreviewClusterRequest):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error: {str(e)}"
-        )
-
-
-@router.get(
-    "/flavors",
-    response_model=FlavorListResponse,
-    summary="List available flavors",
-    description="Get a list of all available cluster flavors"
-)
-async def list_flavors():
-    """List all available cluster flavors."""
-    try:
-        generator = ClusterGenerator()
-        flavors = generator.list_available_flavors()
-        
-        flavor_info_list = []
-        for flavor in flavors:
-            is_valid = generator.validate_flavor(flavor)
-            flavor_info_list.append(FlavorInfo(
-                name=flavor,
-                valid=is_valid,
-                description=f"Cluster flavor template: {flavor}"
-            ))
-        
-        return FlavorListResponse(
-            flavors=flavor_info_list,
-            total=len(flavor_info_list)
-        )
-    
-    except Exception as e:
-        logger.error(f"Error listing flavors: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list flavors: {str(e)}"
-        )
-
-
-@router.get(
-    "/flavors/{flavor_name}/validate",
-    response_model=ValidateFlavorResponse,
-    summary="Validate flavor",
-    description="Validate a specific cluster flavor template"
-)
-async def validate_flavor(flavor_name: str):
-    """Validate a specific cluster flavor."""
-    try:
-        generator = ClusterGenerator()
-        is_valid = generator.validate_flavor(flavor_name)
-        
-        if is_valid:
-            message = f"Flavor '{flavor_name}' is valid and ready to use"
-        else:
-            available_flavors = generator.list_available_flavors()
-            message = f"Flavor '{flavor_name}' is invalid or not found. Available flavors: {', '.join(available_flavors)}"
-        
-        return ValidateFlavorResponse(
-            flavor=flavor_name,
-            valid=is_valid,
-            message=message
-        )
-    
-    except Exception as e:
-        logger.error(f"Error validating flavor: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to validate flavor: {str(e)}"
-        )
-
-
-@router.get(
-    "/flavors/{flavor_name}/template",
-    response_class=PlainTextResponse,
-    summary="Get flavor template",
-    description="Get the raw template content for a specific flavor"
-)
-async def get_flavor_template(flavor_name: str):
-    """Get the raw template content for a specific flavor."""
-    try:
-        generator = ClusterGenerator()
-        
-        if not generator.validate_flavor(flavor_name):
-            available_flavors = generator.list_available_flavors()
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Flavor '{flavor_name}' not found. Available flavors: {', '.join(available_flavors)}"
-            )
-        
-        # Load the template file directly
-        template_path = Path(__file__).parent.parent.parent / "templates" / f"{flavor_name}.yaml"
-        
-        if not template_path.exists():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Template file for flavor '{flavor_name}' not found"
-            )
-        
-        with open(template_path, 'r', encoding='utf-8') as f:
-            template_content = f.read()
-        
-        return PlainTextResponse(
-            content=template_content,
-            media_type="text/yaml"
-        )
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting template: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get template: {str(e)}"
-        )
-
-
-@router.get(
-    "/flavors/{flavor_name}/variables",
-    summary="Get template variables",
-    description="Get all variables used in a specific flavor template"
-)
-async def get_template_variables(flavor_name: str):
-    """Get all variables used in a template."""
-    try:
-        generator = ClusterGenerator()
-        
-        if not generator.validate_flavor(flavor_name):
-            available_flavors = generator.list_available_flavors()
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Flavor '{flavor_name}' not found. Available flavors: {', '.join(available_flavors)}"
-            )
-        
-        # Get template variables
-        template_vars = generator.template_loader.get_template_variables(flavor_name)
-        
-        return {
-            "flavor": flavor_name,
-            "variables": sorted(list(template_vars)),
-            "total": len(template_vars),
-            "message": f"Found {len(template_vars)} variables in template '{flavor_name}'"
-        }
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting template variables: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get template variables: {str(e)}"
         )

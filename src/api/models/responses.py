@@ -13,59 +13,60 @@ class ErrorResponse(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="Error timestamp")
 
 
-class FlavorInfo(BaseModel):
-    """Flavor information model."""
+class VendorInfo(BaseModel):
+    """Vendor information model."""
     
-    name: str = Field(..., description="Flavor name")
-    valid: bool = Field(..., description="Whether the flavor is valid")
-    description: Optional[str] = Field(default=None, description="Flavor description")
+    name: str = Field(..., description="Vendor identifier")
+    display_name: str = Field(..., description="Human-readable vendor name")
 
 
-class FlavorListResponse(BaseModel):
-    """Response model for listing flavors."""
+class VersionInfo(BaseModel):
+    """OpenShift version information."""
     
-    flavors: List[FlavorInfo] = Field(..., description="List of available flavors")
-    total: int = Field(..., description="Total number of flavors")
+    version: str = Field(..., description="Version string (e.g., '4.16')")
+    is_default: bool = Field(..., description="Whether this is the default version")
 
 
-class ValidateFlavorResponse(BaseModel):
-    """Response model for flavor validation."""
+class ConfigInfo(BaseModel):
+    """Configuration option information."""
     
-    flavor: str = Field(..., description="Flavor name")
-    valid: bool = Field(..., description="Whether the flavor is valid")
-    message: str = Field(..., description="Validation message")
+    key: str = Field(..., description="Config key/identifier")
+    name: str = Field(..., description="Config name as it appears in YAML")
+    description: str = Field(..., description="Description of the config")
+    is_optional: bool = Field(..., description="Whether this config is optional")
+
+
+class DefaultsResponse(BaseModel):
+    """Response model for getting default values."""
+    
+    vendors: List[VendorInfo] = Field(..., description="Available vendors")
+    versions: List[VersionInfo] = Field(..., description="Available OpenShift versions")
+    default_configs: List[str] = Field(..., description="Default configs always included")
+    optional_configs: List[ConfigInfo] = Field(..., description="Optional configs")
+    default_dns_domain: str = Field(..., description="Default DNS domain")
+
+
+class GenerateClusterResponse(BaseModel):
+    """Response model for cluster generation."""
+    
+    cluster_name: str = Field(..., description="Cluster name")
+    yaml_content: str = Field(..., description="Generated YAML content")
+    vendors_used: List[str] = Field(..., description="Vendors included in configuration")
+    ocp_version: str = Field(..., description="OpenShift version used")
+    nodepool_count: int = Field(..., description="Number of nodepools generated")
+    generated_at: datetime = Field(default_factory=datetime.utcnow, description="Generation timestamp")
+    message: str = Field(..., description="Success message")
 
 
 class PreviewClusterResponse(BaseModel):
     """Response model for cluster preview."""
     
     cluster_name: str = Field(..., description="Cluster name")
-    output_path: str = Field(..., description="Expected output file path")
     yaml_content: str = Field(..., description="Generated YAML content")
-    flavor_used: str = Field(..., description="Flavor template used")
+    vendors_used: List[str] = Field(..., description="Vendors included in configuration")
+    ocp_version: str = Field(..., description="OpenShift version used")
+    nodepool_count: int = Field(..., description="Number of nodepools generated")
     generated_at: datetime = Field(default_factory=datetime.utcnow, description="Generation timestamp")
-
-
-class GitInfo(BaseModel):
-    """Git operation information."""
-    
-    branch_name: str = Field(..., description="Created branch name")
-    commit_message: str = Field(..., description="Commit message used")
-    file_path: str = Field(..., description="Path to generated file")
-    pushed: bool = Field(..., description="Whether branch was pushed to remote")
-    
-    
-class GenerateClusterResponse(BaseModel):
-    """Response model for cluster generation."""
-    
-    cluster_name: str = Field(..., description="Cluster name")
-    output_path: str = Field(..., description="Output file path")
-    flavor_used: str = Field(..., description="Flavor template used")
-    dry_run: bool = Field(..., description="Whether this was a dry run")
-    git_info: Optional[GitInfo] = Field(default=None, description="Git operation details")
-    yaml_content: Optional[str] = Field(default=None, description="Generated YAML content (dry-run only)")
-    generated_at: datetime = Field(default_factory=datetime.utcnow, description="Generation timestamp")
-    message: str = Field(..., description="Success message")
 
 
 class HealthResponse(BaseModel):

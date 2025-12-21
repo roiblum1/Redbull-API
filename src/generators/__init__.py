@@ -1,6 +1,8 @@
-"""Generators package for cluster configuration generation."""
+"""Generators module for cluster configuration."""
 
-from generators.template_loader import TemplateLoader
-from generators.cluster_generator import ClusterGenerator
+from .cluster_builder import ClusterBuilder, ClusterConfigGenerator
 
-__all__ = ["TemplateLoader", "ClusterGenerator"]
+__all__ = [
+    "ClusterBuilder", 
+    "ClusterConfigGenerator"
+]

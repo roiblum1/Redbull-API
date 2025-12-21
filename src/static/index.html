@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCE Cluster Generator</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">⎈</span>
+                    <h1>MCE Cluster Generator</h1>
+                </div>
+                <div class="header-actions">
+                    <a href="/docs" class="btn btn-ghost" target="_blank">
+                        <span class="btn-icon">📚</span>
+                        API Docs
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="layout-grid">
+                <!-- Form Panel -->
+                <section class="panel form-panel">
+                    <div class="panel-header">
+                        <h2>Cluster Configuration</h2>
+                        <p class="panel-subtitle">Fill in the details to generate your cluster YAML</p>
+                    </div>
+
+                    <form id="clusterForm" class="cluster-form">
+                        <!-- Cluster Name -->
+                        <div class="form-group">
+                            <label for="clusterName">
+                                Cluster Name
+                                <span class="required">*</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                id="clusterName" 
+                                name="cluster_name" 
+                                required
+                                pattern="^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                                placeholder="my-production-cluster"
+                                autocomplete="off"
+                            >
+                            <span class="field-hint">Lowercase letters, numbers, and hyphens only</span>
+                        </div>
+
+                        <!-- Site -->
+                        <div class="form-group">
+                            <label for="site">
+                                Site
+                                <span class="required">*</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                id="site" 
+                                name="site" 
+                                required
+                                placeholder="datacenter-1"
+                                autocomplete="off"
+                            >
+                        </div>
+
+                        <!-- OCP Version -->
+                        <div class="form-group">
+                            <label for="ocpVersion">OpenShift Version</label>
+                            <select id="ocpVersion" name="ocp_version">
+                                <!-- Populated by JavaScript -->
+                            </select>
+                        </div>
+
+                        <!-- DNS Domain -->
+                        <div class="form-group">
+                            <label for="dnsDomain">DNS Domain</label>
+                            <input 
+                                type="text" 
+                                id="dnsDomain" 
+                                name="dns_domain" 
+                                placeholder="example.company.com"
+                                autocomplete="off"
+                            >
+                        </div>
+
+                        <!-- Vendor Configurations Section -->
+                        <div class="form-group vendor-configs-section">
+                            <label>
+                                Vendor Nodepools
+                                <span class="required">*</span>
+                            </label>
+                            <p class="field-hint" style="margin-bottom: 12px;">Add vendors with individual node counts and infrastructure environments</p>
+                            
+                            <div id="vendorConfigsList" class="vendor-configs-list">
+                                <!-- Vendor configs will be added here dynamically -->
+                            </div>
+                            
+                            <button type="button" class="btn btn-secondary btn-add-vendor" id="addVendorBtn">
+                                <span>+</span> Add Vendor
+                            </button>
+                        </div>
+
+                        <!-- Optional Configs -->
+                        <div class="form-group">
+                            <label>Optional Configurations</label>
+                            <div class="checkbox-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="varLibContainers" name="include_var_lib_containers">
+                                    <span class="checkbox-custom"></span>
+                                    <span class="checkbox-text">
+                                        <strong>98-var-lib-containers</strong>
+                                        <small>Configure /var/lib/containers storage</small>
+                                    </span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="ringsize" name="include_ringsize">
+                                    <span class="checkbox-custom"></span>
+                                    <span class="checkbox-text">
+                                        <strong>ringsize</strong>
+                                        <small>Network ring buffer size configuration</small>
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Custom Configs -->
+                        <div class="form-group">
+                            <label for="customConfigs">Custom Configurations</label>
+                            <textarea 
+                                id="customConfigs" 
+                                name="custom_configs" 
+                                rows="3"
+                                placeholder="Enter custom config names, one per line"
+                            ></textarea>
+                            <span class="field-hint">Additional machine config names (one per line)</span>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary btn-large">
+                                <span class="btn-icon">⚡</span>
+                                Generate YAML
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="resetBtn">
+                                Reset
+                            </button>
+                        </div>
+                    </form>
+                </section>
+
+                <!-- Output Panel -->
+                <section class="panel output-panel">
+                    <div class="panel-header">
+                        <h2>Generated YAML</h2>
+                        <div class="output-actions">
+                            <button class="btn btn-icon-only" id="copyBtn" title="Copy to clipboard" disabled>
+                                <span class="copy-icon">📋</span>
+                                <span class="copied-icon" style="display:none">✓</span>
+                            </button>
+                            <button class="btn btn-icon-only" id="downloadBtn" title="Download YAML" disabled>
+                                💾
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="output-container">
+                        <div class="output-placeholder" id="outputPlaceholder">
+                            <div class="placeholder-content">
+                                <span class="placeholder-icon">📄</span>
+                                <p>Fill in the form and click <strong>Generate YAML</strong> to see the output</p>
+                            </div>
+                        </div>
+                        <div class="output-content" id="outputContent" style="display:none">
+                            <pre><code id="yamlOutput"></code></pre>
+                        </div>
+                        <div class="output-error" id="outputError" style="display:none">
+                            <span class="error-icon">⚠️</span>
+                            <p id="errorMessage"></p>
+                        </div>
+                    </div>
+
+                    <!-- Generation Info -->
+                    <div class="generation-info" id="generationInfo" style="display:none">
+                        <div class="info-item">
+                            <span class="info-label">Cluster:</span>
+                            <span class="info-value" id="infoClusterName"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Vendors:</span>
+                            <span class="info-value" id="infoVendors"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Nodepools:</span>
+                            <span class="info-value" id="infoNodepools"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">OCP Version:</span>
+                            <span class="info-value" id="infoVersion"></span>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>MCE Cluster Generator v2.0.0 • <a href="/docs">API Documentation</a></p>
+        </footer>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay" style="display:none">
+        <div class="loading-spinner"></div>
+        <p>Generating configuration...</p>
+    </div>
+
+    <!-- Vendor Config Template (hidden) -->
+    <template id="vendorConfigTemplate">
+        <div class="vendor-config-card" data-index="">
+            <div class="vendor-config-header">
+                <select class="vendor-select" name="vendor" required>
+                    <!-- Options populated by JS -->
+                </select>
+                <button type="button" class="btn-remove-vendor" title="Remove vendor">×</button>
+            </div>
+            <div class="vendor-config-fields">
+                <div class="vendor-field">
+                    <label>Nodes</label>
+                    <input type="number" name="number_of_nodes" min="1" max="100" value="3" required>
+                </div>
+                <div class="vendor-field vendor-field-wide">
+                    <label>Infra Environment</label>
+                    <input type="text" name="infra_env_name" placeholder="prod-infra-env" required>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
