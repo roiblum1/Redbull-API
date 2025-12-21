@@ -24,11 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class ClusterBuilder:
-    """Builder class for constructing cluster configurations.
-    
-    This class follows the Builder pattern to construct complex
-    cluster configurations step by step.
-    """
+    """Builder class for constructing cluster configurations."""
     
     def __init__(self, defaults_manager: Optional[DefaultsManager] = None):
         """Initialize the cluster builder."""
@@ -40,6 +36,7 @@ class ClusterBuilder:
         self._cluster_name: Optional[str] = None
         self._site: Optional[str] = None
         self._dns_domain: Optional[str] = None
+        self._max_pods: int = 250
         self._nodepools: List[NodePool] = []
         self._mc_files: List[str] = []
         self._image_content_sources: List[ImageContentSource] = []
@@ -59,6 +56,11 @@ class ClusterBuilder:
         self._dns_domain = domain
         return self
     
+    def set_max_pods(self, max_pods: int) -> "ClusterBuilder":
+        """Set the maximum pods per node."""
+        self._max_pods = max_pods
+        return self
+    
     def add_nodepool(
         self,
         vendor: str,
@@ -68,14 +70,15 @@ class ClusterBuilder:
         include_ringsize: bool = False,
         custom_configs: Optional[List[str]] = None
     ) -> "ClusterBuilder":
-        """Add a nodepool for a specific vendor with its own node count and infra_env."""
+        """Add a nodepool for a specific vendor."""
         if not self._cluster_name:
             raise ValueError("Cluster name must be set before adding nodepools")
         
-        # Build config list for this nodepool
+        # Build config list for this nodepool (passes max_pods for kubeletconfig)
         config_items = self.defaults_manager.build_config_list(
             cluster_name=self._cluster_name,
             vendor=vendor,
+            max_pods=self._max_pods,
             include_var_lib_containers=include_var_lib_containers,
             include_ringsize=include_ringsize,
             custom_configs=custom_configs
@@ -95,7 +98,7 @@ class ClusterBuilder:
         )
         
         self._nodepools.append(nodepool)
-        logger.debug(f"Added nodepool for vendor: {vendor} with {replicas} nodes, infra_env: {infra_env_name}")
+        logger.debug(f"Added nodepool for vendor: {vendor} with {replicas} nodes")
         return self
     
     def set_mc_files(
@@ -112,6 +115,7 @@ class ClusterBuilder:
         self._mc_files = self.defaults_manager.build_mc_files_list(
             cluster_name=self._cluster_name,
             vendors=vendors,
+            max_pods=self._max_pods,
             include_var_lib_containers=include_var_lib_containers,
             include_ringsize=include_ringsize,
             custom_configs=custom_configs
@@ -172,8 +176,9 @@ class ClusterConfigGenerator:
         self.builder.set_cluster_name(input_params.cluster_name)
         self.builder.set_site(input_params.site)
         self.builder.set_dns_domain(input_params.dns_domain)
+        self.builder.set_max_pods(input_params.max_pods)
         
-        # Add nodepools for each vendor config (each with its own nodes and infra_env)
+        # Add nodepools for each vendor config
         for vendor_config in input_params.vendor_configs:
             self.builder.add_nodepool(
                 vendor=vendor_config.vendor,
@@ -184,7 +189,7 @@ class ClusterConfigGenerator:
                 custom_configs=input_params.custom_configs
             )
         
-        # Set mcFiles (uses vendor names from configs)
+        # Set mcFiles
         vendors = [vc.vendor for vc in input_params.vendor_configs]
         self.builder.set_mc_files(
             vendors=vendors,
@@ -222,9 +227,13 @@ class ClusterConfigGenerator:
         """Get list of supported vendors."""
         return self.defaults_manager.get_supported_vendors()
     
-    def get_default_configs(self) -> List[str]:
+    def get_supported_max_pods(self) -> List[int]:
+        """Get list of supported max pods values."""
+        return self.defaults_manager.get_supported_max_pods()
+    
+    def get_default_configs(self, max_pods: int = 250) -> List[str]:
         """Get list of default configs."""
-        return self.defaults_manager.get_default_configs()
+        return self.defaults_manager.get_default_configs(max_pods)
     
     def get_optional_configs(self) -> Dict[str, str]:
         """Get dictionary of optional configs."""

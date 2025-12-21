@@ -5,16 +5,16 @@ from typing import Dict
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import PlainTextResponse
 
-from models.input import ClusterGenerationInput, VendorConfig
+from config.constants import Vendor, ConfigNames
 from generators.cluster_builder import ClusterConfigGenerator
 from defaults.defaults_manager import DefaultsManager
 from utils.exceptions import MCEGeneratorError
-from config import settings
-from api.models.requests import (
+from config.settings import settings
+from models.requests import (
     GenerateClusterRequest,
     PreviewClusterRequest
 )
-from api.models.responses import (
+from models.responses import (
     GenerateClusterResponse,
     PreviewClusterResponse,
     DefaultsResponse,
@@ -22,6 +22,8 @@ from api.models.responses import (
     VersionInfo,
     ConfigInfo
 )
+from services.validators import ClusterValidator
+from services.converters import RequestConverter
 
 router = APIRouter(prefix="/clusters", tags=["clusters"])
 logger = logging.getLogger(__name__)
@@ -29,16 +31,6 @@ logger = logging.getLogger(__name__)
 # Initialize generator and defaults manager
 generator = ClusterConfigGenerator()
 defaults_manager = DefaultsManager()
-
-
-# Vendor display names mapping
-VENDOR_DISPLAY_NAMES: Dict[str, str] = {
-    "cisco": "Cisco UCS",
-    "dell": "Dell PowerEdge",
-    "dell-data": "Dell Data Services",
-    "h100-gpu": "NVIDIA H100 GPU",
-    "h200-gpu": "NVIDIA H200 GPU"
-}
 
 
 @router.get(
@@ -50,14 +42,16 @@ VENDOR_DISPLAY_NAMES: Dict[str, str] = {
 async def get_defaults():
     """Get all default values for cluster configuration."""
     try:
+        vendor_display_names = Vendor.display_names()
+
         vendors = [
             VendorInfo(
                 name=v,
-                display_name=VENDOR_DISPLAY_NAMES.get(v, v.title())
+                display_name=vendor_display_names.get(v, v.title())
             )
             for v in defaults_manager.get_supported_vendors()
         ]
-        
+
         versions = [
             VersionInfo(
                 version=v,
@@ -65,30 +59,34 @@ async def get_defaults():
             )
             for v in defaults_manager.get_supported_versions()
         ]
-        
+
         optional_configs = [
             ConfigInfo(
                 key="var_lib_containers",
-                name="98-var-lib-containers",
-                description="Configure /var/lib/containers storage",
+                name=ConfigNames.VAR_LIB_CONTAINERS,
+                description="Configure /var/lib/containers storage (required for 500 pods)",
                 is_optional=True
             ),
             ConfigInfo(
                 key="ringsize",
-                name="ringsize",
+                name=ConfigNames.RINGSIZE,
                 description="Network ring buffer size configuration",
                 is_optional=True
             )
         ]
-        
+
+        # Get default configs for standard pods (250)
+        from services.config_builder import ConfigListBuilder
+        base_configs = ConfigListBuilder._build_base_configs(250)
+
         return DefaultsResponse(
             vendors=vendors,
             versions=versions,
-            default_configs=defaults_manager.get_default_configs(),
+            default_configs=base_configs,
             optional_configs=optional_configs,
             default_dns_domain=defaults_manager.get_default_dns_domain()
         )
-    
+
     except Exception as e:
         logger.error(f"Error getting defaults: {e}")
         raise HTTPException(
@@ -105,11 +103,13 @@ async def get_defaults():
 async def list_vendors():
     """List all available hardware vendors."""
     vendors = defaults_manager.get_supported_vendors()
+    vendor_display_names = Vendor.display_names()
+
     return {
         "vendors": [
             {
                 "name": v,
-                "display_name": VENDOR_DISPLAY_NAMES.get(v, v.title())
+                "display_name": vendor_display_names.get(v, v.title())
             }
             for v in vendors
         ],
@@ -143,43 +143,19 @@ async def generate_cluster(request: GenerateClusterRequest):
     """Generate cluster configuration."""
     try:
         logger.info(f"Generating cluster configuration for: {request.cluster_name}")
-        
-        # Validate vendors
-        valid_vendors = set(defaults_manager.get_supported_vendors())
-        for vc in request.vendor_configs:
-            if vc.vendor not in valid_vendors:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid vendor: {vc.vendor}. Valid vendors: {', '.join(sorted(valid_vendors))}"
-                )
-        
-        # Convert request to ClusterGenerationInput
-        vendor_configs = [
-            VendorConfig(
-                vendor=vc.vendor,
-                number_of_nodes=vc.number_of_nodes,
-                infra_env_name=vc.infra_env_name
-            )
-            for vc in request.vendor_configs
-        ]
-        
-        cluster_input = ClusterGenerationInput(
-            cluster_name=request.cluster_name,
-            site=request.site,
-            vendor_configs=vendor_configs,
-            ocp_version=request.ocp_version,
-            dns_domain=request.dns_domain,
-            include_var_lib_containers=request.include_var_lib_containers,
-            include_ringsize=request.include_ringsize,
-            custom_configs=request.custom_configs
-        )
-        
+
+        # Validate vendors using centralized validator
+        ClusterValidator.validate_vendors(request.vendor_configs)
+
+        # Convert request to internal model using converter service
+        cluster_input = RequestConverter.from_generate_request(request)
+
         # Generate YAML
         yaml_content = generator.generate_yaml(cluster_input)
-        
+
         # Get vendor names for response
         vendors_used = [vc.vendor for vc in request.vendor_configs]
-        
+
         return GenerateClusterResponse(
             cluster_name=request.cluster_name,
             yaml_content=yaml_content,
@@ -188,7 +164,7 @@ async def generate_cluster(request: GenerateClusterRequest):
             nodepool_count=len(request.vendor_configs),
             message=f"Cluster configuration generated successfully with {len(request.vendor_configs)} nodepool(s)"
         )
-    
+
     except MCEGeneratorError as e:
         logger.error(f"Generator error: {e.message}")
         raise HTTPException(
@@ -198,7 +174,7 @@ async def generate_cluster(request: GenerateClusterRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
+        logger.error(f"Unexpected error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error: {str(e)}"
@@ -215,42 +191,18 @@ async def preview_cluster(request: PreviewClusterRequest):
     """Preview cluster configuration."""
     try:
         logger.info(f"Previewing cluster configuration for: {request.cluster_name}")
-        
-        # Validate vendors
-        valid_vendors = set(defaults_manager.get_supported_vendors())
-        for vc in request.vendor_configs:
-            if vc.vendor not in valid_vendors:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid vendor: {vc.vendor}. Valid vendors: {', '.join(sorted(valid_vendors))}"
-                )
-        
-        # Convert request to ClusterGenerationInput
-        vendor_configs = [
-            VendorConfig(
-                vendor=vc.vendor,
-                number_of_nodes=vc.number_of_nodes,
-                infra_env_name=vc.infra_env_name
-            )
-            for vc in request.vendor_configs
-        ]
-        
-        cluster_input = ClusterGenerationInput(
-            cluster_name=request.cluster_name,
-            site=request.site,
-            vendor_configs=vendor_configs,
-            ocp_version=request.ocp_version,
-            dns_domain=request.dns_domain,
-            include_var_lib_containers=request.include_var_lib_containers,
-            include_ringsize=request.include_ringsize,
-            custom_configs=request.custom_configs
-        )
-        
+
+        # Validate vendors using centralized validator
+        ClusterValidator.validate_vendors(request.vendor_configs)
+
+        # Convert request to internal model using converter service
+        cluster_input = RequestConverter.from_preview_request(request)
+
         # Generate YAML
         yaml_content = generator.generate_yaml(cluster_input)
-        
+
         vendors_used = [vc.vendor for vc in request.vendor_configs]
-        
+
         return PreviewClusterResponse(
             cluster_name=request.cluster_name,
             yaml_content=yaml_content,
@@ -258,7 +210,7 @@ async def preview_cluster(request: PreviewClusterRequest):
             ocp_version=request.ocp_version,
             nodepool_count=len(request.vendor_configs)
         )
-    
+
     except MCEGeneratorError as e:
         logger.error(f"Generator error: {e.message}")
         raise HTTPException(
@@ -268,7 +220,7 @@ async def preview_cluster(request: PreviewClusterRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
+        logger.error(f"Unexpected error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error: {str(e)}"

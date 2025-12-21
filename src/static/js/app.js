@@ -167,11 +167,46 @@ function setupEventListeners() {
     // Download button
     elements.downloadBtn.addEventListener('click', handleDownload);
 
+    // Max pods radio buttons
+    const maxPodsGroup = document.getElementById('maxPodsGroup');
+    maxPodsGroup.querySelectorAll('.radio-label').forEach(label => {
+        label.addEventListener('click', (e) => {
+            // Update selected state
+            maxPodsGroup.querySelectorAll('.radio-label').forEach(l => l.classList.remove('selected'));
+            label.classList.add('selected');
+            label.querySelector('input').checked = true;
+            
+            // Handle var-lib-containers requirement for 500 pods
+            handleMaxPodsChange(label.dataset.value);
+        });
+    });
+
     // Real-time validation feedback
     elements.form.querySelectorAll('input[required]').forEach(input => {
         input.addEventListener('blur', () => validateField(input));
         input.addEventListener('input', () => clearFieldError(input));
     });
+}
+
+/**
+ * Handle max pods selection change
+ */
+function handleMaxPodsChange(value) {
+    const varLibCheckbox = document.getElementById('varLibContainers');
+    const varLibLabel = varLibCheckbox.closest('.checkbox-label');
+    
+    if (value === '500') {
+        // Force enable and disable the checkbox
+        varLibCheckbox.checked = true;
+        varLibCheckbox.disabled = true;
+        varLibLabel.classList.add('forced');
+        varLibLabel.title = 'Required for 500 pods configuration';
+    } else {
+        // Re-enable the checkbox
+        varLibCheckbox.disabled = false;
+        varLibLabel.classList.remove('forced');
+        varLibLabel.title = '';
+    }
 }
 
 /**
@@ -253,12 +288,17 @@ function getFormData() {
         .map(s => s.trim())
         .filter(s => s.length > 0);
 
+    // Get max pods value
+    const maxPodsInput = form.querySelector('input[name="max_pods"]:checked');
+    const maxPods = maxPodsInput ? parseInt(maxPodsInput.value, 10) : 250;
+
     return {
         cluster_name: form.querySelector('#clusterName').value.trim(),
         site: form.querySelector('#site').value.trim(),
         vendor_configs: vendorConfigs,
         ocp_version: form.querySelector('#ocpVersion').value,
         dns_domain: form.querySelector('#dnsDomain').value.trim() || defaults.default_dns_domain,
+        max_pods: maxPods,
         include_var_lib_containers: form.querySelector('#varLibContainers').checked,
         include_ringsize: form.querySelector('#ringsize').checked,
         custom_configs: customConfigs

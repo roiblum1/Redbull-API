@@ -92,6 +92,29 @@
                             >
                         </div>
 
+                        <!-- Max Pods -->
+                        <div class="form-group">
+                            <label>Max Pods per Node</label>
+                            <div class="radio-group" id="maxPodsGroup">
+                                <label class="radio-label selected" data-value="250">
+                                    <input type="radio" name="max_pods" value="250" checked>
+                                    <span class="radio-custom"></span>
+                                    <span class="radio-text">
+                                        <strong>250 pods</strong>
+                                        <small>Default configuration</small>
+                                    </span>
+                                </label>
+                                <label class="radio-label" data-value="500">
+                                    <input type="radio" name="max_pods" value="500">
+                                    <span class="radio-custom"></span>
+                                    <span class="radio-text">
+                                        <strong>500 pods</strong>
+                                        <small>Requires var-lib-containers + kubeletconfig-500</small>
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+
                         <!-- Vendor Configurations Section -->
                         <div class="form-group vendor-configs-section">
                             <label>

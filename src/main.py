@@ -8,11 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from config import settings
+from config.settings import settings
 from utils.logging_config import setup_logging
 from utils.exceptions import MCEGeneratorError
 from api.routers import clusters
-from api.models.responses import HealthResponse, ErrorResponse
+from models.responses import HealthResponse, ErrorResponse
 
 
 @asynccontextmanager

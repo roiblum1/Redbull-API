@@ -5,7 +5,9 @@ when generating cluster configurations.
 """
 
 from typing import List, Literal
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from config.constants import Vendor, OCPVersion, MaxPods, ConfigNames, ClusterDefaults
 
 
 class VendorConfig(BaseModel):
@@ -30,8 +32,8 @@ class VendorConfig(BaseModel):
     @field_validator('vendor')
     @classmethod
     def validate_vendor(cls, v: str) -> str:
-        """Validate vendor name."""
-        valid_vendors = {"cisco", "dell", "dell-data", "h100-gpu", "h200-gpu"}
+        """Validate vendor name against supported vendors."""
+        valid_vendors = set(Vendor.values())
         if v not in valid_vendors:
             raise ValueError(
                 f"Invalid vendor '{v}'. Valid vendors: {', '.join(sorted(valid_vendors))}"
@@ -67,19 +69,25 @@ class ClusterGenerationInput(BaseModel):
     )
     
     ocp_version: Literal["4.15", "4.16"] = Field(
-        default="4.16",
+        default=ClusterDefaults.OCP_VERSION,
         description="OpenShift version (determines imageContentSources)"
     )
-    
+
     dns_domain: str = Field(
-        default="example.company.com",
+        default=ClusterDefaults.DNS_DOMAIN,
         description="DNS domain/zone for the cluster"
     )
+
+    # Pod configuration
+    max_pods: Literal[250, 500] = Field(
+        default=ClusterDefaults.MAX_PODS,
+        description=f"Maximum pods per node ({MaxPods.STANDARD.value} default, {MaxPods.HIGH_DENSITY.value} requires special config)"
+    )
     
-    # Optional configs
+    # Optional configs (var_lib_containers becomes required if max_pods=500)
     include_var_lib_containers: bool = Field(
         default=False,
-        description="Include 98-var-lib-containers machine config"
+        description="Include 98-var-lib-containers machine config (required if max_pods=500)"
     )
     
     include_ringsize: bool = Field(
@@ -91,6 +99,14 @@ class ClusterGenerationInput(BaseModel):
         default_factory=list,
         description="Additional custom machine config names to include"
     )
+
+    @model_validator(mode='after')
+    def validate_pods_config(self) -> 'ClusterGenerationInput':
+        """Ensure var_lib_containers is enabled when max_pods is 500."""
+        if self.max_pods == MaxPods.HIGH_DENSITY.value:
+            # Force var_lib_containers to True when using high-density pod configuration
+            object.__setattr__(self, 'include_var_lib_containers', True)
+        return self
 
     @field_validator('cluster_name')
     @classmethod
@@ -120,6 +136,11 @@ class ClusterGenerationInput(BaseModel):
     def vendors(self) -> List[str]:
         """Get list of vendor names."""
         return [vc.vendor for vc in self.vendor_configs]
+    
+    @property
+    def kubeletconfig_name(self) -> str:
+        """Get the appropriate kubeletconfig name based on max_pods."""
+        return ConfigNames.get_kubelet_config_name(self.max_pods)
 
     class Config:
         """Pydantic config."""
@@ -133,8 +154,9 @@ class ClusterGenerationInput(BaseModel):
                 ],
                 "ocp_version": "4.16",
                 "dns_domain": "prod.company.com",
-                "include_var_lib_containers": True,
+                "max_pods": 250,
+                "include_var_lib_containers": False,
                 "include_ringsize": False,
-                "custom_configs": ["custom-network-config"]
+                "custom_configs": []
             }
         }
