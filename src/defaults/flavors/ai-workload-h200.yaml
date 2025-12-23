@@ -1,0 +1,17 @@
+# AI/ML Workload Cluster - NVIDIA H200 GPU
+# Next-gen GPU for demanding AI workloads
+
+name: AI Workload (H200)
+description: AI/ML cluster with 4 NVIDIA H200 GPU nodes
+
+vendors:
+  - vendor: h200-gpu
+    nodes: 4
+    infra_env: h200-gpu-infra
+
+ocp_version: "4.16"
+max_pods: 250
+include_var_lib_containers: false
+include_ringsize: false
+custom_configs: []
+

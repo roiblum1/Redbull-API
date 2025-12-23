@@ -9,9 +9,12 @@ from fastapi import HTTPException, status
 
 from config.constants import Vendor
 from models.requests import VendorConfigRequest
+from utils.logging import LoggingMixin, get_logger
+
+logger = get_logger(__name__)
 
 
-class ClusterValidator:
+class ClusterValidator(LoggingMixin):
     """Centralized validation service for cluster requests."""
 
     @staticmethod

@@ -1,0 +1,157 @@
+# Default values for mce-cluster-generator
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: docker.io/roi12345/mce-cluster-generator
+  pullPolicy: IfNotPresent
+  tag: "2.0.0"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false
+
+service:
+  type: ClusterIP
+  port: 8000
+  targetPort: 8000
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: mce-api.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: mce-api-tls
+  #    hosts:
+  #      - mce-api.local
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Application configuration
+config:
+  # Server settings
+  host: "0.0.0.0"
+  port: 8000
+  debug: false
+  logLevel: "INFO"
+
+  # Cluster defaults
+  defaultOcpVersion: "4.16"
+  defaultDnsDomain: "example.company.com"
+  privateRegistry: "registry.internal.company.com"
+
+  # Supported vendors (comma-separated)
+  supportedVendors: "cisco,dell,dell-data,h100-gpu,h200-gpu"
+
+  # Supported versions (comma-separated)
+  supportedVersions: "4.15,4.16"
+
+  # Available sites (comma-separated)
+  availableSites: "datacenter-1,datacenter-2,datacenter-3"
+
+  # Security
+  corsOrigins: "*"
+
+  # Limits
+  maxNodes: 100
+
+# Persistent storage for logs
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 5Gi
+  # existingClaim: ""
+
+# ConfigMap for additional configuration files
+configMap:
+  enabled: false
+  data: {}
+
+# Secrets for sensitive data
+secrets:
+  enabled: false
+  data: {}
+
+# Liveness probe
+livenessProbe:
+  enabled: true
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  successThreshold: 1
+  failureThreshold: 3
+
+# Readiness probe
+readinessProbe:
+  enabled: true
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  successThreshold: 1
+  failureThreshold: 3
+
+# Environment variables from existing ConfigMap
+envFrom: []
+# - configMapRef:
+#     name: my-config
+# - secretRef:
+#     name: my-secret

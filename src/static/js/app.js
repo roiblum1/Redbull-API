@@ -7,6 +7,7 @@ const API_BASE = '/api/v1';
 // DOM Elements
 const elements = {
     form: null,
+    flavorSelect: null,
     vendorConfigsList: null,
     addVendorBtn: null,
     vendorConfigTemplate: null,
@@ -30,6 +31,7 @@ const elements = {
 
 // State
 let defaults = null;
+let flavors = null;
 let generatedYaml = null;
 let currentClusterName = null;
 let vendorConfigIndex = 0;
@@ -38,36 +40,43 @@ let vendorConfigIndex = 0;
  * Initialize the application
  */
 async function init() {
-    // Cache DOM elements
-    elements.form = document.getElementById('clusterForm');
-    elements.vendorConfigsList = document.getElementById('vendorConfigsList');
-    elements.addVendorBtn = document.getElementById('addVendorBtn');
-    elements.vendorConfigTemplate = document.getElementById('vendorConfigTemplate');
-    elements.ocpVersion = document.getElementById('ocpVersion');
-    elements.dnsDomain = document.getElementById('dnsDomain');
-    elements.outputPlaceholder = document.getElementById('outputPlaceholder');
-    elements.outputContent = document.getElementById('outputContent');
-    elements.outputError = document.getElementById('outputError');
-    elements.yamlOutput = document.getElementById('yamlOutput');
-    elements.errorMessage = document.getElementById('errorMessage');
-    elements.copyBtn = document.getElementById('copyBtn');
-    elements.downloadBtn = document.getElementById('downloadBtn');
-    elements.resetBtn = document.getElementById('resetBtn');
-    elements.loadingOverlay = document.getElementById('loadingOverlay');
-    elements.generationInfo = document.getElementById('generationInfo');
-    elements.infoClusterName = document.getElementById('infoClusterName');
-    elements.infoVendors = document.getElementById('infoVendors');
-    elements.infoNodepools = document.getElementById('infoNodepools');
-    elements.infoVersion = document.getElementById('infoVersion');
+    try {
+        // Cache DOM elements
+        elements.form = document.getElementById('clusterForm');
+        elements.flavorSelect = document.getElementById('flavorSelect');
+        elements.vendorConfigsList = document.getElementById('vendorConfigsList');
+        elements.addVendorBtn = document.getElementById('addVendorBtn');
+        elements.vendorConfigTemplate = document.getElementById('vendorConfigTemplate');
+        elements.ocpVersion = document.getElementById('ocpVersion');
+        elements.dnsDomain = document.getElementById('dnsDomain');
+        elements.outputPlaceholder = document.getElementById('outputPlaceholder');
+        elements.outputContent = document.getElementById('outputContent');
+        elements.outputError = document.getElementById('outputError');
+        elements.yamlOutput = document.getElementById('yamlOutput');
+        elements.errorMessage = document.getElementById('errorMessage');
+        elements.copyBtn = document.getElementById('copyBtn');
+        elements.downloadBtn = document.getElementById('downloadBtn');
+        elements.resetBtn = document.getElementById('resetBtn');
+        elements.loadingOverlay = document.getElementById('loadingOverlay');
+        elements.generationInfo = document.getElementById('generationInfo');
+        elements.infoClusterName = document.getElementById('infoClusterName');
+        elements.infoVendors = document.getElementById('infoVendors');
+        elements.infoNodepools = document.getElementById('infoNodepools');
+        elements.infoVersion = document.getElementById('infoVersion');
 
-    // Load defaults from API
-    await loadDefaults();
+        // Load defaults from API
+        await loadDefaults();
 
-    // Setup event listeners
-    setupEventListeners();
+        // Setup event listeners
+        setupEventListeners();
 
-    // Add initial vendor config
-    addVendorConfig();
+        // Add initial vendor config
+        addVendorConfig();
+        
+        console.log('MCE Cluster Generator initialized successfully');
+    } catch (error) {
+        console.error('Failed to initialize application:', error);
+    }
 }
 
 /**
@@ -75,23 +84,54 @@ async function init() {
  */
 async function loadDefaults() {
     try {
-        const response = await fetch(`${API_BASE}/clusters/defaults`);
-        if (!response.ok) {
+        // Load defaults, flavors, and sites in parallel
+        const [defaultsResponse, flavorsResponse, sitesResponse] = await Promise.all([
+            fetch(`${API_BASE}/clusters/defaults`),
+            fetch(`${API_BASE}/clusters/flavors`),
+            fetch(`${API_BASE}/clusters/sites`)
+        ]);
+
+        if (!defaultsResponse.ok) {
             throw new Error('Failed to load defaults');
         }
-        defaults = await response.json();
-        
+        defaults = await defaultsResponse.json();
+
+        if (flavorsResponse.ok) {
+            const flavorsData = await flavorsResponse.json();
+            flavors = flavorsData.flavors;
+            populateFlavors(flavors);
+        }
+
+        if (sitesResponse.ok) {
+            const sitesData = await sitesResponse.json();
+            populateSites(sitesData.sites);
+        }
+
         // Populate versions dropdown
         populateVersions(defaults.versions);
-        
+
         // Set default DNS domain
         elements.dnsDomain.value = defaults.default_dns_domain;
         elements.dnsDomain.placeholder = defaults.default_dns_domain;
-        
+
     } catch (error) {
         console.error('Error loading defaults:', error);
         showError('Failed to load configuration defaults. Please refresh the page.');
     }
+}
+
+/**
+ * Populate flavors dropdown
+ */
+function populateFlavors(flavorsList) {
+    if (!elements.flavorSelect || !flavorsList) return;
+
+    elements.flavorSelect.innerHTML = `
+        <option value="">-- Select a flavor or configure manually --</option>
+        ${flavorsList.map(flavor => `
+            <option value="${flavor.name}">${flavor.description}</option>
+        `).join('')}
+    `;
 }
 
 /**
@@ -103,6 +143,21 @@ function populateVersions(versions) {
             OpenShift ${version.version}${version.is_default ? ' (default)' : ''}
         </option>
     `).join('');
+}
+
+/**
+ * Populate sites dropdown
+ */
+function populateSites(sites) {
+    const siteSelect = document.getElementById('site');
+    if (!siteSelect || !sites) return;
+
+    siteSelect.innerHTML = `
+        <option value="">-- Select a site --</option>
+        ${sites.map(site => `
+            <option value="${site}">${site}</option>
+        `).join('')}
+    `;
 }
 
 /**
@@ -155,6 +210,11 @@ function setupEventListeners() {
     // Form submission
     elements.form.addEventListener('submit', handleFormSubmit);
 
+    // Flavor selection
+    if (elements.flavorSelect) {
+        elements.flavorSelect.addEventListener('change', handleFlavorChange);
+    }
+
     // Add vendor button
     elements.addVendorBtn.addEventListener('click', () => addVendorConfig());
 
@@ -186,6 +246,142 @@ function setupEventListeners() {
         input.addEventListener('blur', () => validateField(input));
         input.addEventListener('input', () => clearFieldError(input));
     });
+}
+
+/**
+ * Handle flavor selection
+ */
+async function handleFlavorChange(e) {
+    const flavorName = e.target.value;
+    if (!flavorName) return;
+
+    try {
+        // Fetch flavor details
+        const response = await fetch(`${API_BASE}/clusters/flavors/${flavorName}`);
+        if (!response.ok) {
+            throw new Error('Failed to load flavor');
+        }
+        const flavor = await response.json();
+        console.log('Loaded flavor:', flavor);
+
+        // Apply flavor to form
+        applyFlavor(flavor);
+
+    } catch (error) {
+        console.error('Error loading flavor:', error);
+        alert('Failed to load flavor: ' + error.message);
+    }
+}
+
+/**
+ * Apply flavor values to the form
+ */
+function applyFlavor(flavor) {
+    try {
+        // Clear existing vendor configs
+        elements.vendorConfigsList.innerHTML = '';
+        vendorConfigIndex = 0;
+
+        // Add vendor configs from flavor
+        if (flavor.vendors && flavor.vendors.length > 0) {
+            flavor.vendors.forEach(vendor => {
+                addVendorConfigWithValues(vendor.vendor, vendor.nodes, `${vendor.vendor}-infra`);
+            });
+        }
+
+        // Set OCP version
+        if (flavor.ocp_version && elements.ocpVersion) {
+            elements.ocpVersion.value = flavor.ocp_version;
+        }
+
+        // Set max pods
+        const maxPodsValue = (flavor.max_pods || 250).toString();
+        const maxPodsGroup = document.getElementById('maxPodsGroup');
+        if (maxPodsGroup) {
+            maxPodsGroup.querySelectorAll('.radio-label').forEach(label => {
+                label.classList.remove('selected');
+                if (label.dataset.value === maxPodsValue) {
+                    label.classList.add('selected');
+                    label.querySelector('input').checked = true;
+                }
+            });
+            handleMaxPodsChange(maxPodsValue);
+        }
+
+        // Set optional configs
+        const varLibCheckbox = document.getElementById('varLibContainers');
+        const ringsizeCheckbox = document.getElementById('ringsize');
+        if (varLibCheckbox) varLibCheckbox.checked = flavor.includes_var_lib_containers || false;
+        if (ringsizeCheckbox) ringsizeCheckbox.checked = flavor.includes_ringsize || false;
+
+        // Set custom configs
+        const customConfigsEl = document.getElementById('customConfigs');
+        if (customConfigsEl) {
+            if (flavor.custom_configs && flavor.custom_configs.length > 0) {
+                customConfigsEl.value = flavor.custom_configs.join('\n');
+            } else {
+                customConfigsEl.value = '';
+            }
+        }
+
+        // Show feedback
+        showFlavorAppliedFeedback(flavor.name);
+        console.log('Flavor applied successfully:', flavor.name);
+    } catch (error) {
+        console.error('Error applying flavor:', error);
+    }
+}
+
+/**
+ * Add vendor config with flavor values
+ */
+function addVendorConfigWithValues(vendorName, nodeCount, infraEnv) {
+    if (!defaults) return;
+    
+    const template = elements.vendorConfigTemplate.content.cloneNode(true);
+    const card = template.querySelector('.vendor-config-card');
+    card.dataset.index = vendorConfigIndex++;
+    
+    // Populate vendor dropdown and select the vendor
+    const vendorSelect = card.querySelector('.vendor-select');
+    vendorSelect.innerHTML = `
+        <option value="">Select vendor...</option>
+        ${defaults.vendors.map(v => `
+            <option value="${v.name}" ${v.name === vendorName ? 'selected' : ''}>
+                ${v.display_name}
+            </option>
+        `).join('')}
+    `;
+
+    // Set node count and infra env
+    card.querySelector('[name="number_of_nodes"]').value = nodeCount;
+    card.querySelector('[name="infra_env_name"]').value = infraEnv;
+    
+    // Add remove button handler
+    const removeBtn = card.querySelector('.btn-remove-vendor');
+    removeBtn.addEventListener('click', () => {
+        card.remove();
+        updateRemoveButtons();
+    });
+    
+    elements.vendorConfigsList.appendChild(card);
+    updateRemoveButtons();
+}
+
+/**
+ * Show feedback when flavor is applied
+ */
+function showFlavorAppliedFeedback(flavorName) {
+    const select = elements.flavorSelect;
+    const originalBg = select.style.backgroundColor;
+
+    select.style.backgroundColor = 'rgba(35, 134, 54, 0.3)';
+    select.style.borderColor = 'var(--color-success)';
+
+    setTimeout(() => {
+        select.style.backgroundColor = '';
+        select.style.borderColor = '';
+    }, 1500);
 }
 
 /**
@@ -510,6 +706,11 @@ function handleDownload() {
  */
 function handleReset() {
     elements.form.reset();
+
+    // Reset flavor selector
+    if (elements.flavorSelect) {
+        elements.flavorSelect.value = '';
+    }
     
     // Clear vendor configs and add one empty one
     elements.vendorConfigsList.innerHTML = '';
@@ -520,6 +721,17 @@ function handleReset() {
     if (defaults) {
         elements.dnsDomain.value = defaults.default_dns_domain;
     }
+
+    // Reset max pods to 250
+    const maxPodsGroup = document.getElementById('maxPodsGroup');
+    maxPodsGroup.querySelectorAll('.radio-label').forEach(label => {
+        label.classList.remove('selected');
+        if (label.dataset.value === '250') {
+            label.classList.add('selected');
+            label.querySelector('input').checked = true;
+        }
+    });
+    handleMaxPodsChange('250');
 
     // Hide output
     hideOutput();

@@ -1,0 +1,17 @@
+# AI/ML Workload Cluster - NVIDIA H100 GPU
+# Optimized for AI and machine learning workloads
+
+name: AI Workload (H100)
+description: AI/ML cluster with 3 NVIDIA H100 GPU nodes
+
+vendors:
+  - vendor: h100-gpu
+    nodes: 3
+    infra_env: h100-gpu-infra
+
+ocp_version: "4.16"
+max_pods: 250
+include_var_lib_containers: false
+include_ringsize: false
+custom_configs: []
+

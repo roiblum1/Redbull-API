@@ -1,0 +1,19 @@
+# High Density Dell PowerEdge Cluster
+# 3 nodes, 500 pods per node (requires var-lib-containers)
+
+name: High Density Dell PowerEdge
+description: 3-node Dell PowerEdge cluster with 500 pods/node (high density)
+
+vendors:
+  - vendor: dell
+    nodes: 3
+    infra_env: dell-infra
+
+ocp_version: "4.16"
+max_pods: 500
+
+# Required for 500 pods - automatically enabled
+include_var_lib_containers: true
+include_ringsize: false
+custom_configs: []
+

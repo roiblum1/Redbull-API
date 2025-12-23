@@ -72,4 +72,5 @@ Thumbs.db
 
 # Project specific
 test_repo/
-example_output/
+example_output/# Exclude large offline deployment archives
+offline-deployment/*.tar.gz

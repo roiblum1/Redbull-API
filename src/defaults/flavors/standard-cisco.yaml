@@ -1,0 +1,17 @@
+# Standard Cisco UCS Cluster
+# 3 nodes, 250 pods per node, default configurations
+
+name: Standard Cisco UCS
+description: Standard 3-node Cisco UCS cluster with 250 pods/node
+
+vendors:
+  - vendor: cisco
+    nodes: 3
+    infra_env: cisco-infra
+
+ocp_version: "4.16"
+max_pods: 250
+include_var_lib_containers: false
+include_ringsize: false
+custom_configs: []
+

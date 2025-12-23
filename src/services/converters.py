@@ -9,9 +9,12 @@ from typing import List
 from models.requests import GenerateClusterRequest, PreviewClusterRequest, VendorConfigRequest
 from models.input import ClusterGenerationInput, VendorConfig
 from config.constants import MaxPods
+from utils.logging import LoggingMixin, get_logger
+
+logger = get_logger(__name__)
 
 
-class RequestConverter:
+class RequestConverter(LoggingMixin):
     """Converts API request models to internal domain models."""
 
     @staticmethod

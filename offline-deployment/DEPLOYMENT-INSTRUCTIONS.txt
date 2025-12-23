@@ -1,0 +1,87 @@
+========================================
+MCE Cluster Generator - Offline Deployment
+========================================
+
+Version: 2.0.0
+Package: mce-cluster-generator-2.0.0-20251222-122435.tar.gz
+Created: Mon Dec 22 12:24:45 PM IST 2025
+
+DEPLOYMENT INSTRUCTIONS
+========================================
+
+1. Transfer Files to Disconnected Environment
+   - Copy mce-cluster-generator-2.0.0-20251222-122435.tar.gz to target system
+   - Copy docker-compose.offline.yml (if using compose)
+   - Copy .env.example and configure as .env
+
+2. Load Image
+   # Extract and load the image (use 'podman' or 'docker')
+   gunzip mce-cluster-generator-2.0.0-20251222-122435.tar.gz
+   podman load -i mce-cluster-generator-2.0.0-20251222-122435.tar
+   # OR: docker load -i mce-cluster-generator-2.0.0-20251222-122435.tar
+
+   # Verify image loaded
+   podman images | grep mce-cluster-generator
+   # OR: docker images | grep mce-cluster-generator
+
+3. Run the Container
+
+   Option A: Using Podman/Docker Run
+   ----------------------------------
+   podman run -d \
+     --name mce-api \
+     -p 8000:8000 \
+     -e LOG_LEVEL=INFO \
+     -e DEFAULT_OCP_VERSION=4.16 \
+     -e PRIVATE_REGISTRY=your-registry.com \
+     docker.io/roi12345/mce-cluster-generator:2.0.0
+   # OR: Replace 'podman' with 'docker' in the command above
+
+   Option B: Using Docker Compose
+   -------------------------------
+   # Configure .env file first
+   docker-compose -f docker-compose.offline.yml up -d
+   # OR: podman-compose -f docker-compose.offline.yml up -d
+
+4. Verify Deployment
+   # Check health
+   curl http://localhost:8000/health
+
+   # Check logs
+   podman logs mce-api
+   # OR: docker logs mce-api
+
+   # Access API docs
+   http://localhost:8000/docs
+
+5. Configuration
+   Environment variables can be set via:
+   - Podman/Docker run -e flags
+   - docker-compose.yml environment section
+   - .env file (with compose)
+
+   Required for disconnected:
+   - PRIVATE_REGISTRY: Your internal registry
+   - DEFAULT_DNS_DOMAIN: Your DNS domain
+   - SUPPORTED_VENDORS: Vendor list
+   - DEFAULT_OCP_VERSION: OpenShift version
+
+========================================
+TROUBLESHOOTING
+========================================
+
+Image won't start:
+  podman logs mce-api
+  # OR: docker logs mce-api
+
+Check configuration:
+  podman exec mce-api env | grep -E 'HOST|PORT|LOG_LEVEL'
+  # OR: docker exec mce-api env | grep -E 'HOST|PORT|LOG_LEVEL'
+
+Interactive shell:
+  podman exec -it mce-api /bin/bash
+  # OR: docker exec -it mce-api /bin/bash
+
+========================================
+For support, see README.md
+========================================

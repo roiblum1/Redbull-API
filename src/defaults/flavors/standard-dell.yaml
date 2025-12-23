@@ -1,0 +1,25 @@
+# Standard Dell PowerEdge Cluster
+# 3 nodes, 250 pods per node, default configurations
+
+name: Standard Dell PowerEdge
+description: Standard 3-node Dell PowerEdge cluster with 250 pods/node
+
+# Vendor configurations - each creates a nodepool
+vendors:
+  - vendor: dell
+    nodes: 3
+    infra_env: dell-infra
+
+# OpenShift version (4.15 or 4.16)
+ocp_version: "4.16"
+
+# Max pods per node (250 or 500)
+max_pods: 250
+
+# Optional configurations
+include_var_lib_containers: false
+include_ringsize: false
+
+# Custom machine configs (optional)
+custom_configs: []
+

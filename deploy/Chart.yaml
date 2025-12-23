@@ -1,0 +1,14 @@
+apiVersion: v2
+name: mce-cluster-generator
+description: A Helm chart for MCE Cluster Generator API
+type: application
+version: 2.0.0
+appVersion: "2.0.0"
+keywords:
+  - mce
+  - cluster
+  - generator
+  - openshift
+maintainers:
+  - name: roi
+    email: roi@example.com

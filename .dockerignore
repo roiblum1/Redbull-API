@@ -65,9 +65,13 @@ tmp/
 .coverage
 htmlcov/
 
-# Documentation
-*.md
+# Documentation (keep essential ones)
 docs/
+README.md
+REFACTORING_SUMMARY.md
+IMPROVEMENTS_COMPLETED.md
+LOGGING_IMPROVEMENTS.md
+LOGGING_QUICK_WINS_COMPLETED.md
 
 # Examples and sites (these are for testing, not production)
 examples/
@@ -81,6 +85,19 @@ ssh-keys/
 *.crt
 
 # Docker
-.dockerignore
-Dockerfile
 docker-compose.yml
+
+# Cleanup and startup scripts (not needed in container)
+fix_imports.py
+start.py
+
+# Deployment files
+build-and-push.sh
+save-for-offline.sh
+offline-deployment/
+deploy/
+
+# Documentation
+DOCKER_DEPLOYMENT_COMPLETE.md
+HELM_CHART_COMPLETE.md
+QUICK_START.md

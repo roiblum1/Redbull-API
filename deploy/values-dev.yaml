@@ -1,0 +1,34 @@
+# Development environment values
+# Usage: helm install mce-api ./deploy -f ./deploy/values-dev.yaml
+
+replicaCount: 1
+
+image:
+  repository: docker.io/roi12345/mce-cluster-generator
+  pullPolicy: Always
+  tag: "latest"
+
+config:
+  debug: true
+  logLevel: "DEBUG"
+  defaultOcpVersion: "4.16"
+  defaultDnsDomain: "dev.company.com"
+  privateRegistry: "registry.dev.company.com"
+  supportedVendors: "cisco,dell,dell-data,h100-gpu,h200-gpu"
+  supportedVersions: "4.15,4.16"
+  corsOrigins: "*"
+  maxNodes: 50
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+persistence:
+  enabled: false
+
+ingress:
+  enabled: false

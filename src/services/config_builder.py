@@ -8,6 +8,9 @@ from typing import List, Optional
 from dataclasses import dataclass
 
 from config.constants import ConfigNames, MaxPods
+from utils.logging import LoggingMixin, get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -21,7 +24,7 @@ class ConfigBuildParams:
     custom_configs: Optional[List[str]] = None
 
 
-class ConfigListBuilder:
+class ConfigListBuilder(LoggingMixin):
     """Builds configuration lists for cluster generation.
 
     This class consolidates the config building logic that was previously
@@ -56,7 +59,7 @@ class ConfigListBuilder:
 
     @staticmethod
     def _build_base_configs(max_pods: int) -> List[str]:
-        """Build base configuration list.
+        """Build base configuration list (internal).
 
         Args:
             max_pods: Maximum pods per node.
@@ -67,6 +70,21 @@ class ConfigListBuilder:
         configs = [ConfigNames.WORKERS_CHRONY]
         configs.append(ConfigNames.get_kubelet_config_name(max_pods))
         return configs
+
+    @staticmethod
+    def build_base_configs(max_pods: int) -> List[str]:
+        """Build base configuration list (public API).
+
+        This method is used by the service layer to get base configs
+        for API responses (like /defaults endpoint).
+
+        Args:
+            max_pods: Maximum pods per node.
+
+        Returns:
+            List of base config names.
+        """
+        return ConfigListBuilder._build_base_configs(max_pods)
 
     @staticmethod
     def _add_optional_configs(
@@ -124,6 +142,15 @@ class ConfigListBuilder:
         Returns:
             List of configuration names for the nodepool.
         """
+        logger.debug(
+            f"Building nodepool config",
+            extra={
+                "cluster_name": cluster_name,
+                "vendor": vendor,
+                "max_pods": max_pods
+            }
+        )
+
         configs = []
 
         # Add vendor-specific nm-conf
@@ -142,6 +169,11 @@ class ConfigListBuilder:
 
         # Add custom configs
         ConfigListBuilder._add_custom_configs(configs, custom_configs)
+
+        logger.debug(
+            f"Built {len(configs)} configs for nodepool",
+            extra={"config_count": len(configs)}
+        )
 
         return configs
 

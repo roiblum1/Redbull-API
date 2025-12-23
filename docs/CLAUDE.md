@@ -14,12 +14,14 @@ MCE Cluster Generator API - A FastAPI-based REST API for generating OpenShift cl
 source .venv/bin/activate
 
 # Start the API server (development mode with auto-reload)
-python start.py
+python src/main.py
 
 # Access points:
-# - API: http://localhost:8000
+# - UI: http://localhost:8000/
+# - API: http://localhost:8000/api/v1/
 # - Swagger UI: http://localhost:8000/docs
 # - ReDoc: http://localhost:8000/redoc
+# - Health: http://localhost:8000/health
 ```
 
 ### Docker Commands

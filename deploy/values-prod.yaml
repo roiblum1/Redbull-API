@@ -1,0 +1,78 @@
+# Production environment values
+# Usage: helm install mce-api ./deploy -f ./deploy/values-prod.yaml
+
+replicaCount: 3
+
+image:
+  repository: docker.io/roi12345/mce-cluster-generator
+  pullPolicy: IfNotPresent
+  tag: "2.0.0"
+
+config:
+  debug: false
+  logLevel: "INFO"
+  defaultOcpVersion: "4.16"
+  defaultDnsDomain: "cluster.company.com"
+  privateRegistry: "registry.company.com"
+  supportedVendors: "cisco,dell,dell-data,h100-gpu,h200-gpu"
+  supportedVersions: "4.15,4.16"
+  corsOrigins: "https://console.company.com,https://api.company.com"
+  maxNodes: 100
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+persistence:
+  enabled: true
+  storageClass: "standard"
+  size: 10Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: mce-api.company.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: mce-api-tls
+      hosts:
+        - mce-api.company.com
+
+nodeSelector:
+  workload: api
+
+tolerations:
+  - key: "workload"
+    operator: "Equal"
+    value: "api"
+    effect: "NoSchedule"
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - mce-cluster-generator
+          topologyKey: kubernetes.io/hostname

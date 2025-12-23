@@ -3,6 +3,10 @@
 import os
 from pathlib import Path
 from typing import Optional, List
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 class Settings:
@@ -51,10 +55,16 @@ class Settings:
     
     # Supported vendors (comma-separated in env var)
     SUPPORTED_VENDORS: List[str] = os.getenv(
-        "SUPPORTED_VENDORS", 
+        "SUPPORTED_VENDORS",
         "cisco,dell,dell-data,h100-gpu,h200-gpu"
     ).split(",")
-    
+
+    # Available sites (comma-separated in env var)
+    AVAILABLE_SITES: List[str] = os.getenv(
+        "AVAILABLE_SITES",
+        "datacenter-1,datacenter-2,datacenter-3"
+    ).split(",")
+
     @property
     def defaults_path(self) -> Path:
         """Get defaults directory path."""

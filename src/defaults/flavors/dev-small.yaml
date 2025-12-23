@@ -1,0 +1,17 @@
+# Development/Testing Cluster
+# Minimal single-node cluster for development
+
+name: Development (Small)
+description: Small 1-node cluster for development/testing
+
+vendors:
+  - vendor: dell
+    nodes: 1
+    infra_env: dev-infra
+
+ocp_version: "4.16"
+max_pods: 250
+include_var_lib_containers: false
+include_ringsize: false
+custom_configs: []
+

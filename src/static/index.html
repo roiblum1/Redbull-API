@@ -38,18 +38,36 @@
                     </div>
 
                     <form id="clusterForm" class="cluster-form">
+                        <!-- Flavor Selector -->
+                        <div class="form-group flavor-selector">
+                            <label for="flavorSelect">
+                                Quick Start with Flavor
+                                <span class="optional-badge">optional</span>
+                            </label>
+                            <select id="flavorSelect" name="flavor">
+                                <option value="">-- Select a flavor or configure manually --</option>
+                                <!-- Populated by JavaScript -->
+                            </select>
+                            <span class="field-hint">Select a flavor to auto-fill the form, or configure manually below</span>
+                        </div>
+
+                        <div class="form-divider">
+                            <span>Configuration Details</span>
+                        </div>
+
                         <!-- Cluster Name -->
                         <div class="form-group">
                             <label for="clusterName">
                                 Cluster Name
                                 <span class="required">*</span>
                             </label>
-                            <input 
-                                type="text" 
-                                id="clusterName" 
-                                name="cluster_name" 
+                            <input
+                                type="text"
+                                id="clusterName"
+                                name="cluster_name"
                                 required
-                                pattern="^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                                pattern="[a-z0-9]([-a-z0-9]*[a-z0-9])?"
+                                title="Must be lowercase letters, numbers, and hyphens. Cannot start or end with hyphen."
                                 placeholder="my-production-cluster"
                                 autocomplete="off"
                             >
@@ -62,14 +80,10 @@
                                 Site
                                 <span class="required">*</span>
                             </label>
-                            <input 
-                                type="text" 
-                                id="site" 
-                                name="site" 
-                                required
-                                placeholder="datacenter-1"
-                                autocomplete="off"
-                            >
+                            <select id="site" name="site" required>
+                                <option value="">-- Select a site --</option>
+                                <!-- Populated by JavaScript -->
+                            </select>
                         </div>
 
                         <!-- OCP Version -->

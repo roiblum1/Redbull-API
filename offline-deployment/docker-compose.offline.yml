@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  mce-api:
+    image: docker.io/roi12345/mce-cluster-generator:2.0.0
+    container_name: mce-api
+    ports:
+      - "8000:8000"
+    environment:
+      # Server settings
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+
+      # Cluster defaults (configure for your environment)
+      - DEFAULT_OCP_VERSION=4.16
+      - DEFAULT_DNS_DOMAIN=example.company.com
+      - PRIVATE_REGISTRY=registry.internal.company.com
+      - SUPPORTED_VENDORS=cisco,dell,dell-data,h100-gpu,h200-gpu
+
+      # Security
+      - CORS_ORIGINS=*
+
+      # Operational
+      - MAX_NODES=100
+
+    volumes:
+      # Mount logs directory
+      - ./logs:/app/logs
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  logs:

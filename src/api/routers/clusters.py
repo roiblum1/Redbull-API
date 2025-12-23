@@ -1,15 +1,18 @@
-"""Cluster management API endpoints."""
+"""Cluster management API endpoints.
 
-import logging
+This module follows the Thin Controller pattern:
+- Controllers handle HTTP concerns (request/response, status codes)
+- Business logic is delegated to the service layer
+- No direct access to repositories or generators
+"""
+
 from typing import Dict
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.responses import PlainTextResponse
 
-from config.constants import Vendor, ConfigNames
-from generators.cluster_builder import ClusterConfigGenerator
-from defaults.defaults_manager import DefaultsManager
-from utils.exceptions import MCEGeneratorError
-from config.settings import settings
+from services.cluster_service import ClusterService, create_cluster_service
+from utils.exceptions import handle_api_exceptions
+from utils.logging import get_logger
 from models.requests import (
     GenerateClusterRequest,
     PreviewClusterRequest
@@ -17,20 +20,23 @@ from models.requests import (
 from models.responses import (
     GenerateClusterResponse,
     PreviewClusterResponse,
-    DefaultsResponse,
-    VendorInfo,
-    VersionInfo,
-    ConfigInfo
+    DefaultsResponse
 )
-from services.validators import ClusterValidator
-from services.converters import RequestConverter
 
 router = APIRouter(prefix="/clusters", tags=["clusters"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
-# Initialize generator and defaults manager
-generator = ClusterConfigGenerator()
-defaults_manager = DefaultsManager()
+
+# Dependency injection for service layer
+def get_cluster_service() -> ClusterService:
+    """Get cluster service instance (dependency injection).
+
+    This function can be overridden in tests to inject mock services.
+
+    Returns:
+        ClusterService instance
+    """
+    return create_cluster_service()
 
 
 @router.get(
@@ -39,60 +45,20 @@ defaults_manager = DefaultsManager()
     summary="Get default values",
     description="Get all default values for cluster generation"
 )
-async def get_defaults():
-    """Get all default values for cluster configuration."""
-    try:
-        vendor_display_names = Vendor.display_names()
+@handle_api_exceptions
+async def get_defaults(service: ClusterService = Depends(get_cluster_service)):
+    """Get all default values for cluster configuration.
 
-        vendors = [
-            VendorInfo(
-                name=v,
-                display_name=vendor_display_names.get(v, v.title())
-            )
-            for v in defaults_manager.get_supported_vendors()
-        ]
+    Args:
+        service: Injected cluster service
 
-        versions = [
-            VersionInfo(
-                version=v,
-                is_default=(v == settings.DEFAULT_OCP_VERSION)
-            )
-            for v in defaults_manager.get_supported_versions()
-        ]
+    Returns:
+        Default values for cluster generation
 
-        optional_configs = [
-            ConfigInfo(
-                key="var_lib_containers",
-                name=ConfigNames.VAR_LIB_CONTAINERS,
-                description="Configure /var/lib/containers storage (required for 500 pods)",
-                is_optional=True
-            ),
-            ConfigInfo(
-                key="ringsize",
-                name=ConfigNames.RINGSIZE,
-                description="Network ring buffer size configuration",
-                is_optional=True
-            )
-        ]
-
-        # Get default configs for standard pods (250)
-        from services.config_builder import ConfigListBuilder
-        base_configs = ConfigListBuilder._build_base_configs(250)
-
-        return DefaultsResponse(
-            vendors=vendors,
-            versions=versions,
-            default_configs=base_configs,
-            optional_configs=optional_configs,
-            default_dns_domain=defaults_manager.get_default_dns_domain()
-        )
-
-    except Exception as e:
-        logger.error(f"Error getting defaults: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get defaults: {str(e)}"
-        )
+    Raises:
+        HTTPException: If defaults cannot be retrieved
+    """
+    return service.get_defaults()
 
 
 @router.get(
@@ -100,21 +66,16 @@ async def get_defaults():
     summary="List available vendors",
     description="Get a list of all available hardware vendors"
 )
-async def list_vendors():
-    """List all available hardware vendors."""
-    vendors = defaults_manager.get_supported_vendors()
-    vendor_display_names = Vendor.display_names()
+async def list_vendors(service: ClusterService = Depends(get_cluster_service)):
+    """List all available hardware vendors.
 
-    return {
-        "vendors": [
-            {
-                "name": v,
-                "display_name": vendor_display_names.get(v, v.title())
-            }
-            for v in vendors
-        ],
-        "total": len(vendors)
-    }
+    Args:
+        service: Injected cluster service
+
+    Returns:
+        List of available vendors with display names
+    """
+    return service.list_vendors()
 
 
 @router.get(
@@ -122,14 +83,137 @@ async def list_vendors():
     summary="List available OpenShift versions",
     description="Get a list of all supported OpenShift versions"
 )
-async def list_versions():
-    """List all supported OpenShift versions."""
-    versions = defaults_manager.get_supported_versions()
-    return {
-        "versions": versions,
-        "default": settings.DEFAULT_OCP_VERSION,
-        "total": len(versions)
-    }
+async def list_versions(service: ClusterService = Depends(get_cluster_service)):
+    """List all supported OpenShift versions.
+
+    Args:
+        service: Injected cluster service
+
+    Returns:
+        List of OpenShift versions with default
+    """
+    return service.list_versions()
+
+
+@router.get(
+    "/sites",
+    summary="List available sites",
+    description="Get a list of all available deployment sites"
+)
+async def list_sites(service: ClusterService = Depends(get_cluster_service)):
+    """List all available deployment sites.
+
+    Args:
+        service: Injected cluster service
+
+    Returns:
+        List of available deployment sites
+    """
+    return service.list_sites()
+
+
+@router.get(
+    "/flavors",
+    summary="List cluster flavors",
+    description="Get a list of all predefined cluster configuration flavors"
+)
+async def list_cluster_flavors(service: ClusterService = Depends(get_cluster_service)):
+    """List all available cluster flavors.
+
+    Args:
+        service: Injected cluster service
+
+    Returns:
+        List of available cluster flavors
+    """
+    return service.list_flavors()
+
+
+@router.post(
+    "/flavors/reload",
+    summary="Reload flavors from disk",
+    description="Reload all flavor YAML files without restarting the server"
+)
+@handle_api_exceptions
+async def reload_cluster_flavors(service: ClusterService = Depends(get_cluster_service)):
+    """Reload flavors from YAML files.
+
+    Use this after adding new flavor YAML files to pick them up
+    without restarting the server.
+
+    Args:
+        service: Injected cluster service
+
+    Returns:
+        Reload status with available flavors
+
+    Raises:
+        HTTPException: If reload fails
+    """
+    return service.reload_flavors()
+
+
+@router.get(
+    "/flavors/{flavor_name}",
+    summary="Get flavor details",
+    description="Get detailed information about a specific cluster flavor"
+)
+@handle_api_exceptions
+async def get_cluster_flavor(
+    flavor_name: str,
+    service: ClusterService = Depends(get_cluster_service)
+):
+    """Get details of a specific cluster flavor.
+
+    Args:
+        flavor_name: Name of the flavor
+        service: Injected cluster service
+
+    Returns:
+        Flavor details
+
+    Raises:
+        HTTPException: If flavor not found
+    """
+    return service.get_flavor_details(flavor_name)
+
+
+@router.post(
+    "/generate/flavor/{flavor_name}",
+    response_model=GenerateClusterResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Generate cluster from flavor",
+    description="Generate a cluster configuration using a predefined flavor. Only cluster_name, site, and dns_domain are required."
+)
+@handle_api_exceptions
+async def generate_cluster_from_flavor(
+    flavor_name: str,
+    cluster_name: str,
+    site: str,
+    dns_domain: str = None,
+    service: ClusterService = Depends(get_cluster_service)
+):
+    """Generate cluster configuration from a flavor.
+
+    Args:
+        flavor_name: Name of the flavor to use
+        cluster_name: Name for the cluster
+        site: Deployment site
+        dns_domain: Optional DNS domain
+        service: Injected cluster service
+
+    Returns:
+        Generated cluster configuration
+
+    Raises:
+        HTTPException: If flavor not found or generation fails
+    """
+    return service.generate_from_flavor(
+        flavor_name=flavor_name,
+        cluster_name=cluster_name,
+        site=site,
+        dns_domain=dns_domain
+    )
 
 
 @router.post(
@@ -139,46 +223,24 @@ async def list_versions():
     summary="Generate cluster configuration",
     description="Generate a cluster configuration YAML with per-vendor node counts and infra environments"
 )
-async def generate_cluster(request: GenerateClusterRequest):
-    """Generate cluster configuration."""
-    try:
-        logger.info(f"Generating cluster configuration for: {request.cluster_name}")
+@handle_api_exceptions
+async def generate_cluster(
+    request: GenerateClusterRequest,
+    service: ClusterService = Depends(get_cluster_service)
+):
+    """Generate cluster configuration.
 
-        # Validate vendors using centralized validator
-        ClusterValidator.validate_vendors(request.vendor_configs)
+    Args:
+        request: Cluster generation request
+        service: Injected cluster service
 
-        # Convert request to internal model using converter service
-        cluster_input = RequestConverter.from_generate_request(request)
+    Returns:
+        Generated cluster configuration
 
-        # Generate YAML
-        yaml_content = generator.generate_yaml(cluster_input)
-
-        # Get vendor names for response
-        vendors_used = [vc.vendor for vc in request.vendor_configs]
-
-        return GenerateClusterResponse(
-            cluster_name=request.cluster_name,
-            yaml_content=yaml_content,
-            vendors_used=vendors_used,
-            ocp_version=request.ocp_version,
-            nodepool_count=len(request.vendor_configs),
-            message=f"Cluster configuration generated successfully with {len(request.vendor_configs)} nodepool(s)"
-        )
-
-    except MCEGeneratorError as e:
-        logger.error(f"Generator error: {e.message}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=e.message
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error: {str(e)}"
-        )
+    Raises:
+        HTTPException: If validation or generation fails
+    """
+    return service.generate_cluster(request)
 
 
 @router.post(
@@ -187,41 +249,21 @@ async def generate_cluster(request: GenerateClusterRequest):
     summary="Preview cluster configuration",
     description="Generate and preview cluster configuration without any side effects"
 )
-async def preview_cluster(request: PreviewClusterRequest):
-    """Preview cluster configuration."""
-    try:
-        logger.info(f"Previewing cluster configuration for: {request.cluster_name}")
+@handle_api_exceptions
+async def preview_cluster(
+    request: PreviewClusterRequest,
+    service: ClusterService = Depends(get_cluster_service)
+):
+    """Preview cluster configuration.
 
-        # Validate vendors using centralized validator
-        ClusterValidator.validate_vendors(request.vendor_configs)
+    Args:
+        request: Cluster preview request
+        service: Injected cluster service
 
-        # Convert request to internal model using converter service
-        cluster_input = RequestConverter.from_preview_request(request)
+    Returns:
+        Preview of cluster configuration
 
-        # Generate YAML
-        yaml_content = generator.generate_yaml(cluster_input)
-
-        vendors_used = [vc.vendor for vc in request.vendor_configs]
-
-        return PreviewClusterResponse(
-            cluster_name=request.cluster_name,
-            yaml_content=yaml_content,
-            vendors_used=vendors_used,
-            ocp_version=request.ocp_version,
-            nodepool_count=len(request.vendor_configs)
-        )
-
-    except MCEGeneratorError as e:
-        logger.error(f"Generator error: {e.message}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=e.message
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error: {str(e)}"
-        )
+    Raises:
+        HTTPException: If validation or generation fails
+    """
+    return service.preview_cluster(request)

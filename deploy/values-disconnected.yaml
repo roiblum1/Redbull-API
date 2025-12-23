@@ -1,0 +1,52 @@
+# Disconnected/Air-gapped environment values
+# Usage: helm install mce-api ./deploy -f ./deploy/values-disconnected.yaml
+
+replicaCount: 2
+
+image:
+  # For disconnected: pre-load image to local registry
+  repository: registry.internal.local/mce-cluster-generator
+  pullPolicy: IfNotPresent
+  tag: "2.0.0"
+
+# ImagePullSecrets for internal registry if needed
+imagePullSecrets:
+  - name: internal-registry-secret
+
+config:
+  debug: false
+  logLevel: "INFO"
+  defaultOcpVersion: "4.16"
+  defaultDnsDomain: "cluster.internal.local"
+  privateRegistry: "registry.internal.local"
+  supportedVendors: "cisco,dell,dell-data,h100-gpu,h200-gpu"
+  supportedVersions: "4.15,4.16"
+  corsOrigins: "*"
+  maxNodes: 100
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+persistence:
+  enabled: true
+  storageClass: "local-path"  # Use local storage for disconnected
+  size: 5Gi
+
+ingress:
+  enabled: false  # Typically use NodePort or LoadBalancer in disconnected
+
+service:
+  type: NodePort  # Or LoadBalancer depending on environment
+  port: 8000
+
+nodeSelector:
+  node-role.kubernetes.io/worker: ""
+
+# Disable autoscaling in disconnected (metrics may not be available)
+autoscaling:
+  enabled: false

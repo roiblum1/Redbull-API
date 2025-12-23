@@ -2,10 +2,13 @@
 
 This module provides a builder class for constructing cluster configurations
 following the Builder pattern for flexibility and extensibility.
+
+SOLID Principles Applied:
+- Single Responsibility: Builder focuses only on construction logic
+- Dependency Inversion: Depends on abstractions (DefaultsManager injected)
 """
 
 import yaml
-import logging
 from typing import Dict, Any, List, Optional
 
 from models.input import ClusterGenerationInput, VendorConfig
@@ -19,8 +22,10 @@ from models.cluster import (
     ImageContentSource
 )
 from defaults.defaults_manager import DefaultsManager
+from services.config_builder import ConfigListBuilder
+from utils.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ClusterBuilder:
@@ -74,8 +79,8 @@ class ClusterBuilder:
         if not self._cluster_name:
             raise ValueError("Cluster name must be set before adding nodepools")
         
-        # Build config list for this nodepool (passes max_pods for kubeletconfig)
-        config_items = self.defaults_manager.build_config_list(
+        # Build config list for this nodepool using ConfigListBuilder service
+        config_names = ConfigListBuilder.build_for_nodepool(
             cluster_name=self._cluster_name,
             vendor=vendor,
             max_pods=self._max_pods,
@@ -83,7 +88,7 @@ class ClusterBuilder:
             include_ringsize=include_ringsize,
             custom_configs=custom_configs
         )
-        
+
         nodepool = NodePool(
             name=f"{self._cluster_name}-{vendor}-nodepool",
             replicas=replicas,
@@ -94,7 +99,7 @@ class ClusterBuilder:
             agentLabelSelector=AgentLabelSelector(
                 nodeLabelValue=infra_env_name
             ),
-            config=[ConfigItem(name=c["name"]) for c in config_items]
+            config=[ConfigItem(name=name) for name in config_names]
         )
         
         self._nodepools.append(nodepool)
@@ -108,11 +113,11 @@ class ClusterBuilder:
         include_ringsize: bool = False,
         custom_configs: Optional[List[str]] = None
     ) -> "ClusterBuilder":
-        """Set the mcFiles list."""
+        """Set the mcFiles list using ConfigListBuilder service."""
         if not self._cluster_name:
             raise ValueError("Cluster name must be set before setting mcFiles")
-        
-        self._mc_files = self.defaults_manager.build_mc_files_list(
+
+        self._mc_files = ConfigListBuilder.build_mc_files(
             cluster_name=self._cluster_name,
             vendors=vendors,
             max_pods=self._max_pods,

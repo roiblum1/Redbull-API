@@ -1,6 +1,5 @@
 """Main FastAPI application for MCE Cluster Generator."""
 
-import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
@@ -9,9 +8,10 @@ from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from config.settings import settings
-from utils.logging_config import setup_logging
+from utils.logging import setup_logging, get_logger
 from utils.exceptions import MCEGeneratorError
 from api.routers import clusters
+from api.middleware.logging_middleware import RequestLoggingMiddleware
 from models.responses import HealthResponse, ErrorResponse
 
 
@@ -24,8 +24,8 @@ async def lifespan(app: FastAPI):
         log_file=settings.LOG_FILE,
         enable_rich=not settings.DEBUG
     )
-    
-    logger = logging.getLogger(__name__)
+
+    logger = get_logger(__name__)
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     logger.info(f"Default OCP Version: {settings.DEFAULT_OCP_VERSION}")
     logger.info(f"Default DNS Domain: {settings.DEFAULT_DNS_DOMAIN}")
@@ -55,6 +55,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add request/response logging middleware
+app.add_middleware(RequestLoggingMiddleware)
 
 # Include API routers
 app.include_router(clusters.router, prefix="/api/v1")
@@ -154,7 +157,12 @@ async def not_found_handler(request: Request, exc):
 
 if __name__ == "__main__":
     import uvicorn
-    
+
+    print(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    print(f"Server: http://{settings.HOST}:{settings.PORT}")
+    print(f"UI: http://{settings.HOST}:{settings.PORT}/")
+    print(f"API Documentation: http://{settings.HOST}:{settings.PORT}/docs")
+
     uvicorn.run(
         "main:app",
         host=settings.HOST,

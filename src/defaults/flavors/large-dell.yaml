@@ -1,0 +1,17 @@
+# Large Dell Cluster
+# 10 nodes for production workloads
+
+name: Large Dell Cluster
+description: Large 10-node Dell PowerEdge cluster
+
+vendors:
+  - vendor: dell
+    nodes: 10
+    infra_env: dell-infra
+
+ocp_version: "4.16"
+max_pods: 250
+include_var_lib_containers: false
+include_ringsize: false
+custom_configs: []
+
